@@ -1,11 +1,8 @@
 .vscode
 .idea
-.cache
 
-
-tmp
-*.o
 *.txr
 *.tx8
 
 /target
+tx8-cli
