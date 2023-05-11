@@ -1,24 +1,11 @@
 .vscode
 .idea
-.clangd
 .cache
-docs
-bin
-build
-cmake-build-debug
-cmake-build-release
-cmake-build-debug-coverage
 
-Makefile
-*.make
-dev
-CMakeUserPresets.json
 
 tmp
 *.o
-compile_commands.json
-TODO.md
-links.md
-out.txr
+*.txr
+*.tx8
 
-rust/tx8-core/target
+/target
