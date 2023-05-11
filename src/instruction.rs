@@ -1,4 +1,6 @@
-pub fn parse_instruction(mem: &Memory, ptr: u32) -> Result<Instruction, Tx8Error> {
+use crate::{Memory, Tx8Error};
+
+pub fn parse_instruction(mem: &Memory, ptr: u32) -> Result<(Instruction, u32), Tx8Error> {
     // instruction pointer is too large
     if ptr > 0xfffff0 {
         return Err(Tx8Error::InstructionError);
@@ -11,7 +13,9 @@ pub fn parse_instruction(mem: &Memory, ptr: u32) -> Result<Instruction, Tx8Error
 
     // if no parameters are passed, then the instruction is fully parsed
     match op_code {
-        OpCode::Halt | OpCode::Nop | OpCode::Return => return Ok(Instruction::no_params(op_code)),
+        OpCode::Halt | OpCode::Nop | OpCode::Return => {
+            return Ok((Instruction::no_params(op_code), 0))
+        }
         _ => (),
     };
 
@@ -25,10 +29,8 @@ pub fn parse_instruction(mem: &Memory, ptr: u32) -> Result<Instruction, Tx8Error
     len += par_len;
     let (second_parameter, par_len) = parse_parameter(mem, ptr + len, second_parameter);
     len += par_len;
-    Ok(Instruction::with_params(
-        op_code,
-        first_parameter,
-        second_parameter,
+    Ok((
+        Instruction::with_params(op_code, first_parameter, second_parameter),
         len,
     ))
 }
@@ -123,7 +125,7 @@ fn parse_parameter(mem: &Memory, ptr: u32, par_mode: ParameterMode) -> (Paramete
 }
 
 #[derive(Clone, Copy, Debug)]
-pub enum Operation {
+pub enum Instruction {
     Halt,
     Nop,
     Jump(Parameter),
@@ -141,36 +143,28 @@ pub enum Operation {
     Return,
 }
 
-#[derive(Clone, Copy, Debug)]
-pub struct Instruction {
-    pub op: Operation,
-    pub len: u32,
-}
-
 impl Instruction {
     fn no_params(op: OpCode) -> Self {
-        let op = match op {
-            OpCode::Halt => Operation::Halt,
-            OpCode::Nop => Operation::Nop,
-            OpCode::Return => Operation::Return,
+        match op {
+            OpCode::Halt => Instruction::Halt,
+            OpCode::Nop => Instruction::Nop,
+            OpCode::Return => Instruction::Return,
             _ => unreachable!("No operation could be found for the no parameter OpCode"),
-        };
-        Instruction { op, len: 1 }
+        }
     }
-    fn with_params(op_code: OpCode, first_par: Parameter, sec_par: Parameter, len: u32) -> Self {
-        let op = match op_code {
-            OpCode::Jump => Operation::Jump(first_par),
-            OpCode::JumpEqual => Operation::JumpEqual(first_par),
-            OpCode::JumpNotEqual => Operation::JumpNotEqual(first_par),
-            OpCode::JumpGreaterThan => Operation::JumpGreaterThan(first_par),
-            OpCode::JumpGreaterEqual => Operation::JumpGreaterEqual(first_par),
-            OpCode::JumpLessThan => Operation::JumpLessThan(first_par),
-            OpCode::JumpLessEqual => Operation::JumpLessEqual(first_par),
-            OpCode::CompareSigned => Operation::CompareSigned(first_par, sec_par),
-            OpCode::CompareFloat => Operation::CompareFloat(first_par, sec_par),
-            OpCode::CompareUnsigned => Operation::CompareUnsigned(first_par, sec_par),
+    fn with_params(op_code: OpCode, first_par: Parameter, sec_par: Parameter) -> Self {
+        match op_code {
+            OpCode::Jump => Instruction::Jump(first_par),
+            OpCode::JumpEqual => Instruction::JumpEqual(first_par),
+            OpCode::JumpNotEqual => Instruction::JumpNotEqual(first_par),
+            OpCode::JumpGreaterThan => Instruction::JumpGreaterThan(first_par),
+            OpCode::JumpGreaterEqual => Instruction::JumpGreaterEqual(first_par),
+            OpCode::JumpLessThan => Instruction::JumpLessThan(first_par),
+            OpCode::JumpLessEqual => Instruction::JumpLessEqual(first_par),
+            OpCode::CompareSigned => Instruction::CompareSigned(first_par, sec_par),
+            OpCode::CompareFloat => Instruction::CompareFloat(first_par, sec_par),
+            OpCode::CompareUnsigned => Instruction::CompareUnsigned(first_par, sec_par),
             _ => unreachable!(),
-        };
-        Instruction { op, len }
+        }
     }
 }

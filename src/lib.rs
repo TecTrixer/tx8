@@ -2,7 +2,7 @@ mod errors;
 pub use errors::Tx8Error;
 
 mod instruction;
-pub use instruction::parse_instruction;
+use instruction::{parse_instruction, Instruction};
 
 pub fn run_code(data: Vec<u8>) {
     let _ = parse_rom(&data);
@@ -65,7 +65,7 @@ impl Cpu {
 }
 
 #[derive(Clone, Debug)]
-struct Memory {
+pub struct Memory {
     array: Vec<u8>,
 }
 
@@ -123,5 +123,31 @@ impl Execution {
             memory: Memory::load_rom(data),
         }
     }
-}
+    fn next_step(&mut self) -> Result<(), Tx8Error> {
+        let (instruction, len) = parse_instruction(&self.memory, self.cpu.p)?;
+        // increase instruction pointer
+        self.cpu.p += len;
+        Ok(())
+    }
 
+    fn execute_instruction(&mut self, instr: Instruction) -> Result<(), Tx8Error> {
+        match instr {
+            Instruction::Halt => todo!(),
+            Instruction::Nop => todo!(),
+            Instruction::Jump(_) => todo!(),
+            Instruction::JumpEqual(_) => todo!(),
+            Instruction::JumpNotEqual(_) => todo!(),
+            Instruction::JumpGreaterThan(_) => todo!(),
+            Instruction::JumpGreaterEqual(_) => todo!(),
+            Instruction::JumpLessThan(_) => todo!(),
+            Instruction::JumpLessEqual(_) => todo!(),
+            Instruction::CompareSigned(_, _) => todo!(),
+            Instruction::CompareFloat(_, _) => todo!(),
+            Instruction::CompareUnsigned(_, _) => todo!(),
+            Instruction::Call(_) => todo!(),
+            Instruction::SysCall(_) => todo!(),
+            Instruction::Return => todo!(),
+        };
+        Ok(())
+    }
+}
