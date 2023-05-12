@@ -12,7 +12,7 @@ pub fn parse_instruction(
     let mut len = 0;
 
     // Read OpCode
-    let op_code = parse_op_code(mem.read_byte(ptr));
+    let op_code = parse_op_code(mem.read_byte(ptr))?;
     len += 1;
 
     // if no parameters are passed, then the instruction is fully parsed
@@ -115,8 +115,8 @@ impl Value {
                     0x03 => cpu.d,
                     0x04 => cpu.r,
                     0x05 => cpu.o,
-                    0x06 => cpu.s,
-                    0x07 => cpu.p,
+                    0x06 => cpu.p,
+                    0x07 => cpu.s,
                     _ => return Err(Tx8Error::InvalidRegister),
                 };
                 let size = get_reg_size(r);
@@ -130,8 +130,8 @@ impl Value {
                     0x03 => cpu.d,
                     0x04 => cpu.r,
                     0x05 => cpu.o,
-                    0x06 => cpu.s,
-                    0x07 => cpu.p,
+                    0x06 => cpu.p,
+                    0x07 => cpu.s,
                     _ => return Err(Tx8Error::InvalidRegister),
                 };
                 let filter = match get_reg_size(r) {
@@ -165,9 +165,23 @@ pub enum Size {
 #[derive(Copy, Clone, Debug)]
 pub enum Writable {
     AbsoluteAddress(AbsoluteAddress),
-    RelativeAddress(RegisterAddress),
+    RelativeAddress(RelativeAddress),
     Register(Register),
     RegisterAddress(RegisterAddress),
+}
+impl Writable {
+    fn from_par(par: Parameter) -> Result<Writable, Tx8Error> {
+        match par {
+            Parameter::Unused => Err(Tx8Error::InstructionError),
+            Parameter::Constant8(_) => Err(Tx8Error::InstructionError),
+            Parameter::Constant16(_) => Err(Tx8Error::InstructionError),
+            Parameter::Constant32(_) => Err(Tx8Error::InstructionError),
+            Parameter::AbsoluteAddress(x) => Ok(Writable::AbsoluteAddress(AbsoluteAddress(x))),
+            Parameter::RelativeAddress(x) => Ok(Writable::RelativeAddress(RelativeAddress(x))),
+            Parameter::Register(x) => Ok(Writable::Register(Register(x))),
+            Parameter::RegisterAddress(x) => Ok(Writable::RegisterAddress(RegisterAddress(x))),
+        }
+    }
 }
 
 impl Write for Writable {
@@ -231,24 +245,24 @@ impl Write for Register {
             0x03 => cpu.d = val,
             0x04 => cpu.r = val,
             0x05 => cpu.o = val,
-            0x06 => cpu.s = val,
-            0x07 => cpu.p = val,
+            0x06 => cpu.p = val,
+            0x07 => cpu.s = val,
             0x10 => cpu.a = (cpu.a & 0xffffff00) | (0xff & val),
             0x11 => cpu.b = (cpu.b & 0xffffff00) | (0xff & val),
             0x12 => cpu.c = (cpu.c & 0xffffff00) | (0xff & val),
             0x13 => cpu.d = (cpu.d & 0xffffff00) | (0xff & val),
             0x14 => cpu.r = (cpu.r & 0xffffff00) | (0xff & val),
             0x15 => cpu.o = (cpu.o & 0xffffff00) | (0xff & val),
-            0x16 => cpu.s = (cpu.s & 0xffffff00) | (0xff & val),
-            0x17 => cpu.p = (cpu.p & 0xffffff00) | (0xff & val),
+            0x16 => cpu.p = (cpu.p & 0xffffff00) | (0xff & val),
+            0x17 => cpu.s = (cpu.s & 0xffffff00) | (0xff & val),
             0x20 => cpu.a = (cpu.a & 0xffff0000) | (0xffff & val),
             0x21 => cpu.b = (cpu.b & 0xffff0000) | (0xffff & val),
             0x22 => cpu.c = (cpu.c & 0xffff0000) | (0xffff & val),
             0x23 => cpu.d = (cpu.d & 0xffff0000) | (0xffff & val),
             0x24 => cpu.r = (cpu.r & 0xffff0000) | (0xffff & val),
             0x25 => cpu.o = (cpu.o & 0xffff0000) | (0xffff & val),
-            0x26 => cpu.s = (cpu.s & 0xffff0000) | (0xffff & val),
-            0x27 => cpu.p = (cpu.p & 0xffff0000) | (0xffff & val),
+            0x26 => cpu.p = (cpu.p & 0xffff0000) | (0xffff & val),
+            0x27 => cpu.s = (cpu.s & 0xffff0000) | (0xffff & val),
             _ => return Err(Tx8Error::InvalidRegister),
         }
         Ok(())
@@ -271,24 +285,24 @@ impl Write for RegisterAddress {
             0x03 => mem.write_int(cpu.d, val),
             0x04 => mem.write_int(cpu.r, val),
             0x05 => mem.write_int(cpu.o, val),
-            0x06 => mem.write_int(cpu.s, val),
-            0x07 => mem.write_int(cpu.p, val),
+            0x06 => mem.write_int(cpu.p, val),
+            0x07 => mem.write_int(cpu.s, val),
             0x10 => mem.write_int(cpu.a & 0xff, val),
             0x11 => mem.write_int(cpu.b & 0xff, val),
             0x12 => mem.write_int(cpu.c & 0xff, val),
             0x13 => mem.write_int(cpu.d & 0xff, val),
             0x14 => mem.write_int(cpu.r & 0xff, val),
             0x15 => mem.write_int(cpu.o & 0xff, val),
-            0x16 => mem.write_int(cpu.s & 0xff, val),
-            0x17 => mem.write_int(cpu.p & 0xff, val),
+            0x16 => mem.write_int(cpu.p & 0xff, val),
+            0x17 => mem.write_int(cpu.s & 0xff, val),
             0x20 => mem.write_int(cpu.a & 0xffff, val),
             0x21 => mem.write_int(cpu.b & 0xffff, val),
             0x22 => mem.write_int(cpu.c & 0xffff, val),
             0x23 => mem.write_int(cpu.d & 0xffff, val),
             0x24 => mem.write_int(cpu.r & 0xffff, val),
             0x25 => mem.write_int(cpu.o & 0xffff, val),
-            0x26 => mem.write_int(cpu.s & 0xffff, val),
-            0x27 => mem.write_int(cpu.p & 0xffff, val),
+            0x26 => mem.write_int(cpu.p & 0xffff, val),
+            0x27 => mem.write_int(cpu.s & 0xffff, val),
             _ => Err(Tx8Error::InvalidRegister),
         }
     }
@@ -319,6 +333,7 @@ pub enum Instruction {
     Call(Value),
     SysCall(Value),
     Return,
+    Load(Writable, Value),
 }
 
 impl Instruction {
@@ -374,7 +389,13 @@ impl Instruction {
             ),
             OpCode::Call => Instruction::Call(Value::from_par(first_par, cpu, mem)?),
             OpCode::SysCall => Instruction::SysCall(Value::from_par(first_par, cpu, mem)?),
-            _ => unreachable!(),
+            OpCode::Halt => unreachable!(),
+            OpCode::Nop => unreachable!(),
+            OpCode::Return => unreachable!(),
+            OpCode::Load => Instruction::Load(
+                Writable::from_par(first_par)?,
+                Value::from_par(sec_par, cpu, mem)?,
+            ),
         })
     }
 
@@ -389,12 +410,14 @@ impl Instruction {
             Instruction::Call(_) => false,
             Instruction::SysCall(_) => true,
             Instruction::Return => false,
+            Instruction::Load(_, _) => true,
         }
     }
 }
-fn parse_op_code(byte: u8) -> OpCode {
-    match byte {
+fn parse_op_code(byte: u8) -> Result<OpCode, Tx8Error> {
+    Ok(match byte {
         0x00 => OpCode::Halt,
+        0x01 => OpCode::Nop,
         0x02 => OpCode::Jump,
         0x03 => OpCode::JumpEqual,
         0x04 => OpCode::JumpNotEqual,
@@ -408,8 +431,9 @@ fn parse_op_code(byte: u8) -> OpCode {
         0x0c => OpCode::Call,
         0x0d => OpCode::Return,
         0x0e => OpCode::SysCall,
-        _ => OpCode::Nop,
-    }
+        0x10 => OpCode::Load,
+        _ => return Err(Tx8Error::InvalidOpCode),
+    })
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -429,4 +453,5 @@ enum OpCode {
     Call,
     Return,
     SysCall,
+    Load,
 }

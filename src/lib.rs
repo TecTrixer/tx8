@@ -12,9 +12,10 @@ use execution::{Effect, Execution};
 pub fn run_code(data: Vec<u8>) -> Result<(), Tx8Error> {
     let data = parse_rom(&data)?;
     let mut execution = Execution::new_with_rom(data);
+    println!("Program output:");
     loop {
         if let Effect::Halted = execution.next_step()? {
-            println!("Program halted");
+            println!("\nProgram halted");
             break;
         }
     }

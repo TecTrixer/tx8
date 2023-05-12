@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     hardware::{Cpu, Memory},
-    instruction::{parse_instruction, Comparison, Instruction, Size, Value},
+    instruction::{parse_instruction, Comparison, Instruction, Size, Value, Writable, Write},
     Tx8Error,
 };
 
@@ -29,7 +29,7 @@ impl<'a> Execution<'a> {
     pub fn next_step(&mut self) -> Result<Effect, Tx8Error> {
         let (instruction, len) = parse_instruction(&self.cpu, &self.memory, self.cpu.p)?;
 
-        let effect = self.execute_instruction(instruction)?;
+        let effect = self.execute_instruction(instruction, len)?;
         // increase instruction pointer
         if instruction.increase_program_counter() {
             self.cpu.p += len;
@@ -37,17 +37,22 @@ impl<'a> Execution<'a> {
         Ok(effect)
     }
 
-    pub fn execute_instruction(&mut self, instr: Instruction) -> Result<Effect, Tx8Error> {
+    pub fn execute_instruction(
+        &mut self,
+        instr: Instruction,
+        len: u32,
+    ) -> Result<Effect, Tx8Error> {
         match instr {
             Instruction::Halt => return Ok(Effect::Halted),
             Instruction::Nop => (),
-            Instruction::Jump(value, comp) => self.jump(value.val, comp),
+            Instruction::Jump(value, comp) => self.jump(value.val, comp, len),
             Instruction::CompareSigned(val, val2) => self.compare_signed(val, val2.val),
             Instruction::CompareFloat(val, val2) => self.compare_float(val.val, val2.val),
             Instruction::CompareUnsigned(val, val2) => self.compare_unsigned(val.val, val2.val),
             Instruction::Call(_) => todo!(),
             Instruction::SysCall(value) => self.sys_call(value.val)?,
             Instruction::Return => todo!(),
+            Instruction::Load(to, val) => self.load(to, val.val)?,
         };
         Ok(Effect::None)
     }
@@ -55,7 +60,7 @@ impl<'a> Execution<'a> {
     fn sys_call(&self, val: u32) -> Result<(), Tx8Error> {
         if let Some(&str) = self.sys_call_map.get(&val) {
             match str {
-                "print" => println!("successfully triggered print"),
+                "print" => print!("{}", self.memory.read_byte(self.cpu.s) as char),
                 _ => return Err(Tx8Error::InvalidSysCall),
             }
             Ok(())
@@ -64,7 +69,7 @@ impl<'a> Execution<'a> {
         }
     }
 
-    fn jump(&mut self, val: u32, comp: Comparison) {
+    fn jump(&mut self, val: u32, comp: Comparison, instr_len: u32) {
         let r = self.cpu.r as i32;
         let cond = match comp {
             Comparison::None => true,
@@ -77,6 +82,8 @@ impl<'a> Execution<'a> {
         };
         if cond {
             self.cpu.p = val;
+        } else {
+            self.cpu.p += instr_len;
         }
     }
 
@@ -92,6 +99,10 @@ impl<'a> Execution<'a> {
     }
     fn compare_unsigned(&mut self, val: u32, val2: u32) {
         self.cpu.r = i64::signum((val as i64) - (val2 as i64)) as u32;
+    }
+
+    fn load(&mut self, to: Writable, val: u32) -> Result<(), Tx8Error> {
+        to.write(&mut self.memory, &mut self.cpu, val)
     }
 }
 
