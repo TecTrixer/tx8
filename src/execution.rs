@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     hardware::{Cpu, Memory},
-    instruction::{parse_instruction, Instruction},
+    instruction::{parse_instruction, Comparison, Instruction, Size, Value},
     Tx8Error,
 };
 
@@ -41,10 +41,10 @@ impl<'a> Execution<'a> {
         match instr {
             Instruction::Halt => return Ok(Effect::Halted),
             Instruction::Nop => (),
-            Instruction::Jump(_, _) => todo!(),
-            Instruction::CompareSigned(_, _) => todo!(),
-            Instruction::CompareFloat(_, _) => todo!(),
-            Instruction::CompareUnsigned(_, _) => todo!(),
+            Instruction::Jump(value, comp) => self.jump(value.val, comp),
+            Instruction::CompareSigned(val, val2) => self.compare_signed(val, val2.val),
+            Instruction::CompareFloat(val, val2) => self.compare_float(val.val, val2.val),
+            Instruction::CompareUnsigned(val, val2) => self.compare_unsigned(val.val, val2.val),
             Instruction::Call(_) => todo!(),
             Instruction::SysCall(value) => self.sys_call(value.val)?,
             Instruction::Return => todo!(),
@@ -62,6 +62,36 @@ impl<'a> Execution<'a> {
         } else {
             Err(Tx8Error::InvalidSysCall)
         }
+    }
+
+    fn jump(&mut self, val: u32, comp: Comparison) {
+        let r = self.cpu.r as i32;
+        let cond = match comp {
+            Comparison::None => true,
+            Comparison::Equal => r == 0,
+            Comparison::NotEqual => r != 0,
+            Comparison::Greater => r > 0,
+            Comparison::GreaterEqual => r >= 0,
+            Comparison::Less => r < 0,
+            Comparison::LessEqual => r <= 0,
+        };
+        if cond {
+            self.cpu.p = val;
+        }
+    }
+
+    fn compare_signed(&mut self, val: Value, val2: u32) {
+        self.cpu.r = match val.size {
+            Size::Byte => i8::signum((val.val as i8) - (val2 as i8)) as u32,
+            Size::Short => i16::signum((val.val as i16) - (val2 as i16)) as u32,
+            Size::Int => i32::signum((val.val as i32) - (val2 as i32)) as u32,
+        };
+    }
+    fn compare_float(&mut self, val: u32, val2: u32) {
+        self.cpu.r = f32::signum(f32::from_bits(val) - f32::from_bits(val2)) as i32 as u32;
+    }
+    fn compare_unsigned(&mut self, val: u32, val2: u32) {
+        self.cpu.r = i64::signum((val as i64) - (val2 as i64)) as u32;
     }
 }
 
