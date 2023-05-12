@@ -4,8 +4,16 @@ pub use errors::Tx8Error;
 mod instruction;
 use instruction::{parse_instruction, Instruction};
 
-pub fn run_code(data: Vec<u8>) {
-    let _ = parse_rom(&data);
+pub fn run_code(data: Vec<u8>) -> Result<(), Tx8Error> {
+    let data = parse_rom(&data)?;
+    let mut execution = Execution::new_with_rom(data);
+    loop {
+        if let Effect::Halted = execution.next_step()? {
+            println!("Program halted");
+            break;
+        }
+    }
+    Ok(())
 }
 
 pub fn parse_rom(data: &Vec<u8>) -> Result<&[u8], Tx8Error> {
@@ -38,7 +46,7 @@ const MB_16: usize = 16_777_216;
 const MB_4: usize = 4_194_304;
 
 #[derive(Clone, Copy, Debug)]
-struct Cpu {
+pub struct Cpu {
     a: u32,
     b: u32,
     c: u32,
@@ -71,13 +79,12 @@ pub struct Memory {
 
 impl Memory {
     fn load_rom(data: &[u8]) -> Self {
-        let mut array = Vec::with_capacity(MB_16);
+        let mut array = vec![0; MB_16];
         array[MB_4..MB_4 + data.len()].copy_from_slice(data);
         Memory { array }
     }
     fn read_byte(&self, ptr: u32) -> u8 {
-        // take only the last 24bit of the pointer
-        let ptr = (0xffffff & ptr) as usize;
+        let ptr = truncate_ptr(ptr);
         self.read(ptr)
     }
 
@@ -90,15 +97,18 @@ impl Memory {
     }
 
     fn read_short(&self, ptr: u32) -> u16 {
-        // take only the last 24bit of the pointer
-        let ptr = (0xffffff & ptr) as usize;
+        let ptr = truncate_ptr(ptr);
 
         let bytes = [self.read(ptr), self.read(ptr + 1)];
         u16::from_le_bytes(bytes)
     }
+    fn read_24bit(&self, ptr: u32) -> u32 {
+        let ptr = truncate_ptr(ptr);
+        let bytes = [self.read(ptr), self.read(ptr + 1), self.read(ptr + 2), 0];
+        u32::from_le_bytes(bytes)
+    }
     fn read_int(&self, ptr: u32) -> u32 {
-        // take only the last 24bit of the pointer
-        let ptr = (0xffffff & ptr) as usize;
+        let ptr = truncate_ptr(ptr);
 
         let bytes = [
             self.read(ptr),
@@ -108,6 +118,39 @@ impl Memory {
         ];
         u32::from_le_bytes(bytes)
     }
+
+    fn write(&mut self, ptr: usize, val: u8) -> Result<(), Tx8Error> {
+        if ptr >= self.array.len() {
+            Err(Tx8Error::OutOfBoundsWrite)
+        } else {
+            self.array[ptr] = val;
+            Ok(())
+        }
+    }
+
+    fn _write_byte(&mut self, ptr: u32, val: u8) -> Result<(), Tx8Error> {
+        let ptr = truncate_ptr(ptr);
+        self.write(ptr, val)
+    }
+    fn _write_short(&mut self, ptr: u32, val: u16) -> Result<(), Tx8Error> {
+        let ptr = truncate_ptr(ptr);
+        let [first, second] = val.to_le_bytes();
+        self.write(ptr, first)?;
+        self.write(ptr + 1, second)
+    }
+    fn write_int(&mut self, ptr: u32, val: u32) -> Result<(), Tx8Error> {
+        let ptr = truncate_ptr(ptr);
+        let [first, second, third, fourth] = val.to_le_bytes();
+        self.write(ptr, first)?;
+        self.write(ptr + 1, second)?;
+        self.write(ptr + 2, third)?;
+        self.write(ptr + 3, fourth)
+    }
+}
+
+fn truncate_ptr(ptr: u32) -> usize {
+    // take only the last 24 bit
+    0xffffff & ptr as usize
 }
 
 #[derive(Clone, Debug)]
@@ -123,17 +166,21 @@ impl Execution {
             memory: Memory::load_rom(data),
         }
     }
-    fn next_step(&mut self) -> Result<(), Tx8Error> {
-        let (instruction, len) = parse_instruction(&self.memory, self.cpu.p)?;
+    fn next_step(&mut self) -> Result<Effect, Tx8Error> {
+        let (instruction, len) = parse_instruction(&self.cpu, &self.memory, self.cpu.p)?;
+
+        let effect = self.execute_instruction(instruction)?;
         // increase instruction pointer
-        self.cpu.p += len;
-        Ok(())
+        if instruction.increase_program_counter() {
+            self.cpu.p += len;
+        }
+        Ok(effect)
     }
 
-    fn execute_instruction(&mut self, instr: Instruction) -> Result<(), Tx8Error> {
+    fn execute_instruction(&mut self, instr: Instruction) -> Result<Effect, Tx8Error> {
         match instr {
-            Instruction::Halt => todo!(),
-            Instruction::Nop => todo!(),
+            Instruction::Halt => return Ok(Effect::Halted),
+            Instruction::Nop => (),
             Instruction::Jump(_) => todo!(),
             Instruction::JumpEqual(_) => todo!(),
             Instruction::JumpNotEqual(_) => todo!(),
@@ -148,6 +195,12 @@ impl Execution {
             Instruction::SysCall(_) => todo!(),
             Instruction::Return => todo!(),
         };
-        Ok(())
+        Ok(Effect::None)
     }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum Effect {
+    None,
+    Halted,
 }

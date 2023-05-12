@@ -11,15 +11,16 @@ struct Cli {
     filename: String,
 }
 
-fn main() {
+fn main() -> Result<(), Tx8Error> {
     let filename = Cli::parse().filename;
     println!("Reading {filename}");
     let file = match read(&filename) {
         Ok(d) => d,
         Err(e) => {
             println!("Failed to open \"{filename}\": {e:?}");
-            return;
+            return Ok(());
         }
     };
-    run_code(file);
+    run_code(file)?;
+    Ok(())
 }

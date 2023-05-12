@@ -1,6 +1,10 @@
-use crate::{Memory, Tx8Error};
+use crate::{Cpu, Memory, Tx8Error};
 
-pub fn parse_instruction(mem: &Memory, ptr: u32) -> Result<(Instruction, u32), Tx8Error> {
+pub fn parse_instruction(
+    cpu: &Cpu,
+    mem: &Memory,
+    ptr: u32,
+) -> Result<(Instruction, u32), Tx8Error> {
     // instruction pointer is too large
     if ptr > 0xfffff0 {
         return Err(Tx8Error::InstructionError);
@@ -30,7 +34,7 @@ pub fn parse_instruction(mem: &Memory, ptr: u32) -> Result<(Instruction, u32), T
     let (second_parameter, par_len) = parse_parameter(mem, ptr + len, second_parameter);
     len += par_len;
     Ok((
-        Instruction::with_params(op_code, first_parameter, second_parameter),
+        Instruction::with_params(op_code, first_parameter, second_parameter, cpu, mem)?,
         len,
     ))
 }
@@ -108,7 +112,7 @@ pub enum Parameter {
     AbsoluteAddress(u32),
     RelativeAddress(u32),
     Register(u8),
-    RegisterAddress(u32),
+    RegisterAddress(u8),
 }
 
 fn parse_parameter(mem: &Memory, ptr: u32, par_mode: ParameterMode) -> (Parameter, u32) {
@@ -117,10 +121,218 @@ fn parse_parameter(mem: &Memory, ptr: u32, par_mode: ParameterMode) -> (Paramete
         ParameterMode::Constant8 => (Parameter::Constant8(mem.read_byte(ptr)), 1),
         ParameterMode::Constant16 => (Parameter::Constant16(mem.read_short(ptr)), 2),
         ParameterMode::Constant32 => (Parameter::Constant32(mem.read_int(ptr)), 4),
-        ParameterMode::AbsoluteAddress => (Parameter::AbsoluteAddress(mem.read_int(ptr)), 4),
-        ParameterMode::RelativeAddress => (Parameter::RelativeAddress(mem.read_int(ptr)), 4),
+        ParameterMode::AbsoluteAddress => (Parameter::AbsoluteAddress(mem.read_24bit(ptr)), 3),
+        ParameterMode::RelativeAddress => (Parameter::RelativeAddress(mem.read_24bit(ptr)), 3),
         ParameterMode::Register => (Parameter::Register(mem.read_byte(ptr)), 1),
-        ParameterMode::RegisterAddress => (Parameter::RegisterAddress(mem.read_int(ptr)), 4),
+        ParameterMode::RegisterAddress => (Parameter::RegisterAddress(mem.read_byte(ptr)), 1),
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct Value {
+    val: u32,
+    size: Size,
+}
+
+impl Value {
+    fn new(val: u32, size: Size) -> Self {
+        Value { val, size }
+    }
+    fn from_par(par: Parameter, cpu: &Cpu, mem: &Memory) -> Result<Self, Tx8Error> {
+        match par {
+            Parameter::Unused => Err(Tx8Error::InstructionError),
+            Parameter::Constant8(x) => Ok(Value::new(x as u32, Size::Byte)),
+            Parameter::Constant16(x) => Ok(Value::new(x as u32, Size::Short)),
+            Parameter::Constant32(x) => Ok(Value::new(x as u32, Size::Int)),
+            Parameter::AbsoluteAddress(ptr) => Ok(Value::new(mem.read_int(ptr), Size::Int)),
+            Parameter::RelativeAddress(ptr) => Ok(Value::new(mem.read_int(ptr + cpu.o), Size::Int)),
+            Parameter::Register(r) => {
+                let val = match 0xf & r {
+                    0x00 => cpu.a,
+                    0x01 => cpu.b,
+                    0x02 => cpu.c,
+                    0x03 => cpu.d,
+                    0x04 => cpu.r,
+                    0x05 => cpu.o,
+                    0x06 => cpu.s,
+                    0x07 => cpu.p,
+                    _ => return Err(Tx8Error::InvalidRegister),
+                };
+                let size = get_reg_size(r);
+                Ok(Value::new(val, size))
+            }
+            Parameter::RegisterAddress(r) => {
+                let val = match 0xf & r {
+                    0x00 => cpu.a,
+                    0x01 => cpu.b,
+                    0x02 => cpu.c,
+                    0x03 => cpu.d,
+                    0x04 => cpu.r,
+                    0x05 => cpu.o,
+                    0x06 => cpu.s,
+                    0x07 => cpu.p,
+                    _ => return Err(Tx8Error::InvalidRegister),
+                };
+                let filter = match get_reg_size(r) {
+                    Size::Byte => 0xff,
+                    Size::Short => 0xffff,
+                    Size::Int => 0xffffffff,
+                };
+                Ok(Value::new(mem.read_int(val & filter), Size::Int))
+            }
+        }
+    }
+}
+
+fn get_reg_size(byte: u8) -> Size {
+    // TODO: maybe get more efficient, was lazy, therefore counted all possibilities
+    match byte {
+        0x00 | 0x01 | 0x02 | 0x03 | 0x04 | 0x05 | 0x06 | 0x07 => Size::Int,
+        0x20 | 0x21 | 0x22 | 0x23 | 0x24 | 0x25 | 0x26 | 0x27 => Size::Short,
+        0x10 | 0x11 | 0x12 | 0x13 | 0x14 | 0x15 | 0x16 | 0x17 => Size::Byte,
+        _ => Size::Int,
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
+pub enum Size {
+    Byte,
+    Short,
+    Int,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub enum Writable {
+    AbsoluteAddress(AbsoluteAddress),
+    RelativeAddress(RegisterAddress),
+    Register(Register),
+    RegisterAddress(RegisterAddress),
+}
+
+impl Write for Writable {
+    fn write(self, mem: &mut Memory, cpu: &mut Cpu, val: u32) -> Result<(), Tx8Error> {
+        match self {
+            Writable::AbsoluteAddress(x) => x.write(mem, cpu, val),
+            Writable::RelativeAddress(x) => x.write(mem, cpu, val),
+            Writable::Register(x) => x.write(mem, cpu, val),
+            Writable::RegisterAddress(x) => x.write(mem, cpu, val),
+        }
+    }
+    fn size(&self) -> Size {
+        match self {
+            Writable::AbsoluteAddress(x) => x.size(),
+            Writable::RelativeAddress(x) => x.size(),
+            Writable::Register(x) => x.size(),
+            Writable::RegisterAddress(x) => x.size(),
+        }
+    }
+}
+
+pub trait Write {
+    fn write(self, mem: &mut Memory, cpu: &mut Cpu, val: u32) -> Result<(), Tx8Error>;
+    fn size(&self) -> Size;
+}
+#[derive(Copy, Clone, Debug)]
+struct AbsoluteAddress(u32);
+
+impl Write for AbsoluteAddress {
+    fn write(self, mem: &mut Memory, _: &mut Cpu, val: u32) -> Result<(), Tx8Error> {
+        mem.write_int(self.0, val)
+    }
+    fn size(&self) -> Size {
+        Size::Int
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
+struct RelativeAddress(u32);
+
+impl Write for RelativeAddress {
+    fn write(self, mem: &mut Memory, cpu: &mut Cpu, val: u32) -> Result<(), Tx8Error> {
+        let ptr = self.0 + cpu.o;
+        mem.write_int(ptr, val)
+    }
+    fn size(&self) -> Size {
+        Size::Int
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
+struct Register(u8);
+
+// TODO: maybe extract mapping into its own function later
+impl Write for Register {
+    fn write(self, _: &mut Memory, cpu: &mut Cpu, val: u32) -> Result<(), Tx8Error> {
+        match self.0 {
+            0x00 => cpu.a = val,
+            0x01 => cpu.b = val,
+            0x02 => cpu.c = val,
+            0x03 => cpu.d = val,
+            0x04 => cpu.r = val,
+            0x05 => cpu.o = val,
+            0x06 => cpu.s = val,
+            0x07 => cpu.p = val,
+            0x10 => cpu.a = (cpu.a & 0xffffff00) | (0xff & val),
+            0x11 => cpu.b = (cpu.b & 0xffffff00) | (0xff & val),
+            0x12 => cpu.c = (cpu.c & 0xffffff00) | (0xff & val),
+            0x13 => cpu.d = (cpu.d & 0xffffff00) | (0xff & val),
+            0x14 => cpu.r = (cpu.r & 0xffffff00) | (0xff & val),
+            0x15 => cpu.o = (cpu.o & 0xffffff00) | (0xff & val),
+            0x16 => cpu.s = (cpu.s & 0xffffff00) | (0xff & val),
+            0x17 => cpu.p = (cpu.p & 0xffffff00) | (0xff & val),
+            0x20 => cpu.a = (cpu.a & 0xffff0000) | (0xffff & val),
+            0x21 => cpu.b = (cpu.b & 0xffff0000) | (0xffff & val),
+            0x22 => cpu.c = (cpu.c & 0xffff0000) | (0xffff & val),
+            0x23 => cpu.d = (cpu.d & 0xffff0000) | (0xffff & val),
+            0x24 => cpu.r = (cpu.r & 0xffff0000) | (0xffff & val),
+            0x25 => cpu.o = (cpu.o & 0xffff0000) | (0xffff & val),
+            0x26 => cpu.s = (cpu.s & 0xffff0000) | (0xffff & val),
+            0x27 => cpu.p = (cpu.p & 0xffff0000) | (0xffff & val),
+            _ => return Err(Tx8Error::InvalidRegister),
+        }
+        Ok(())
+    }
+
+    fn size(&self) -> Size {
+        get_reg_size(self.0)
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
+struct RegisterAddress(u8);
+
+impl Write for RegisterAddress {
+    fn write(self, mem: &mut Memory, cpu: &mut Cpu, val: u32) -> Result<(), Tx8Error> {
+        match self.0 {
+            0x00 => mem.write_int(cpu.a, val),
+            0x01 => mem.write_int(cpu.b, val),
+            0x02 => mem.write_int(cpu.c, val),
+            0x03 => mem.write_int(cpu.d, val),
+            0x04 => mem.write_int(cpu.r, val),
+            0x05 => mem.write_int(cpu.o, val),
+            0x06 => mem.write_int(cpu.s, val),
+            0x07 => mem.write_int(cpu.p, val),
+            0x10 => mem.write_int(cpu.a & 0xff, val),
+            0x11 => mem.write_int(cpu.b & 0xff, val),
+            0x12 => mem.write_int(cpu.c & 0xff, val),
+            0x13 => mem.write_int(cpu.d & 0xff, val),
+            0x14 => mem.write_int(cpu.r & 0xff, val),
+            0x15 => mem.write_int(cpu.o & 0xff, val),
+            0x16 => mem.write_int(cpu.s & 0xff, val),
+            0x17 => mem.write_int(cpu.p & 0xff, val),
+            0x20 => mem.write_int(cpu.a & 0xffff, val),
+            0x21 => mem.write_int(cpu.b & 0xffff, val),
+            0x22 => mem.write_int(cpu.c & 0xffff, val),
+            0x23 => mem.write_int(cpu.d & 0xffff, val),
+            0x24 => mem.write_int(cpu.r & 0xffff, val),
+            0x25 => mem.write_int(cpu.o & 0xffff, val),
+            0x26 => mem.write_int(cpu.s & 0xffff, val),
+            0x27 => mem.write_int(cpu.p & 0xffff, val),
+            _ => Err(Tx8Error::InvalidRegister),
+        }
+    }
+    fn size(&self) -> Size {
+        Size::Int
     }
 }
 
@@ -128,18 +340,18 @@ fn parse_parameter(mem: &Memory, ptr: u32, par_mode: ParameterMode) -> (Paramete
 pub enum Instruction {
     Halt,
     Nop,
-    Jump(Parameter),
-    JumpEqual(Parameter),
-    JumpNotEqual(Parameter),
-    JumpGreaterThan(Parameter),
-    JumpGreaterEqual(Parameter),
-    JumpLessThan(Parameter),
-    JumpLessEqual(Parameter),
-    CompareSigned(Parameter, Parameter),
-    CompareFloat(Parameter, Parameter),
-    CompareUnsigned(Parameter, Parameter),
-    Call(Parameter),
-    SysCall(Parameter),
+    Jump(Value),
+    JumpEqual(Value),
+    JumpNotEqual(Value),
+    JumpGreaterThan(Value),
+    JumpGreaterEqual(Value),
+    JumpLessThan(Value),
+    JumpLessEqual(Value),
+    CompareSigned(Value, Value),
+    CompareFloat(Value, Value),
+    CompareUnsigned(Value, Value),
+    Call(Value),
+    SysCall(Value),
     Return,
 }
 
@@ -152,19 +364,64 @@ impl Instruction {
             _ => unreachable!("No operation could be found for the no parameter OpCode"),
         }
     }
-    fn with_params(op_code: OpCode, first_par: Parameter, sec_par: Parameter) -> Self {
-        match op_code {
-            OpCode::Jump => Instruction::Jump(first_par),
-            OpCode::JumpEqual => Instruction::JumpEqual(first_par),
-            OpCode::JumpNotEqual => Instruction::JumpNotEqual(first_par),
-            OpCode::JumpGreaterThan => Instruction::JumpGreaterThan(first_par),
-            OpCode::JumpGreaterEqual => Instruction::JumpGreaterEqual(first_par),
-            OpCode::JumpLessThan => Instruction::JumpLessThan(first_par),
-            OpCode::JumpLessEqual => Instruction::JumpLessEqual(first_par),
-            OpCode::CompareSigned => Instruction::CompareSigned(first_par, sec_par),
-            OpCode::CompareFloat => Instruction::CompareFloat(first_par, sec_par),
-            OpCode::CompareUnsigned => Instruction::CompareUnsigned(first_par, sec_par),
+    fn with_params(
+        op_code: OpCode,
+        first_par: Parameter,
+        sec_par: Parameter,
+        cpu: &Cpu,
+        mem: &Memory,
+    ) -> Result<Self, Tx8Error> {
+        Ok(match op_code {
+            OpCode::Jump => Instruction::Jump(Value::from_par(first_par, cpu, mem)?),
+            OpCode::JumpEqual => Instruction::JumpEqual(Value::from_par(first_par, cpu, mem)?),
+            OpCode::JumpNotEqual => {
+                Instruction::JumpNotEqual(Value::from_par(first_par, cpu, mem)?)
+            }
+            OpCode::JumpGreaterThan => {
+                Instruction::JumpGreaterThan(Value::from_par(first_par, cpu, mem)?)
+            }
+            OpCode::JumpGreaterEqual => {
+                Instruction::JumpGreaterEqual(Value::from_par(first_par, cpu, mem)?)
+            }
+            OpCode::JumpLessThan => {
+                Instruction::JumpLessThan(Value::from_par(first_par, cpu, mem)?)
+            }
+            OpCode::JumpLessEqual => {
+                Instruction::JumpLessEqual(Value::from_par(first_par, cpu, mem)?)
+            }
+            OpCode::CompareSigned => Instruction::CompareSigned(
+                Value::from_par(first_par, cpu, mem)?,
+                Value::from_par(sec_par, cpu, mem)?,
+            ),
+            OpCode::CompareFloat => Instruction::CompareFloat(
+                Value::from_par(first_par, cpu, mem)?,
+                Value::from_par(sec_par, cpu, mem)?,
+            ),
+            OpCode::CompareUnsigned => Instruction::CompareUnsigned(
+                Value::from_par(first_par, cpu, mem)?,
+                Value::from_par(sec_par, cpu, mem)?,
+            ),
             _ => unreachable!(),
+        })
+    }
+
+    pub fn increase_program_counter(&self) -> bool {
+        match self {
+            Instruction::Halt => false,
+            Instruction::Nop => true,
+            Instruction::Jump(_) => false,
+            Instruction::JumpEqual(_) => false,
+            Instruction::JumpNotEqual(_) => false,
+            Instruction::JumpGreaterThan(_) => false,
+            Instruction::JumpGreaterEqual(_) => false,
+            Instruction::JumpLessThan(_) => false,
+            Instruction::JumpLessEqual(_) => false,
+            Instruction::CompareSigned(_, _) => true,
+            Instruction::CompareFloat(_, _) => true,
+            Instruction::CompareUnsigned(_, _) => true,
+            Instruction::Call(_) => false,
+            Instruction::SysCall(_) => true,
+            Instruction::Return => false,
         }
     }
 }

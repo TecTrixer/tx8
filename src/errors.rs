@@ -3,6 +3,8 @@ use std::{array::TryFromSliceError, error::Error, fmt::Display, str::Utf8Error};
 pub enum Tx8Error {
     ParseError,
     InstructionError,
+    OutOfBoundsWrite,
+    InvalidRegister,
 }
 
 impl Error for Tx8Error {}
