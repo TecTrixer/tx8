@@ -5,6 +5,7 @@ pub enum Tx8Error {
     InstructionError,
     OutOfBoundsWrite,
     InvalidRegister,
+    InvalidSysCall,
 }
 
 impl Error for Tx8Error {}

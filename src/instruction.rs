@@ -39,45 +39,6 @@ pub fn parse_instruction(
     ))
 }
 
-fn parse_op_code(byte: u8) -> OpCode {
-    match byte {
-        0x00 => OpCode::Halt,
-        0x02 => OpCode::Jump,
-        0x03 => OpCode::JumpEqual,
-        0x04 => OpCode::JumpNotEqual,
-        0x05 => OpCode::JumpGreaterThan,
-        0x06 => OpCode::JumpGreaterEqual,
-        0x07 => OpCode::JumpLessThan,
-        0x08 => OpCode::JumpLessEqual,
-        0x09 => OpCode::CompareSigned,
-        0x0a => OpCode::CompareFloat,
-        0x0b => OpCode::CompareUnsigned,
-        0x0c => OpCode::Call,
-        0x0d => OpCode::Return,
-        0x0e => OpCode::SysCall,
-        _ => OpCode::Nop,
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-enum OpCode {
-    Halt,
-    Nop,
-    JumpGreaterThan,
-    JumpNotEqual,
-    JumpEqual,
-    Jump,
-    JumpGreaterEqual,
-    JumpLessThan,
-    JumpLessEqual,
-    CompareSigned,
-    CompareFloat,
-    CompareUnsigned,
-    Call,
-    Return,
-    SysCall,
-}
-
 #[derive(Clone, Copy, Debug)]
 enum ParameterMode {
     Unused,
@@ -130,8 +91,8 @@ fn parse_parameter(mem: &Memory, ptr: u32, par_mode: ParameterMode) -> (Paramete
 
 #[derive(Copy, Clone, Debug)]
 pub struct Value {
-    val: u32,
-    size: Size,
+    pub val: u32,
+    pub size: Size,
 }
 
 impl Value {
@@ -233,7 +194,7 @@ pub trait Write {
     fn size(&self) -> Size;
 }
 #[derive(Copy, Clone, Debug)]
-struct AbsoluteAddress(u32);
+pub struct AbsoluteAddress(u32);
 
 impl Write for AbsoluteAddress {
     fn write(self, mem: &mut Memory, _: &mut Cpu, val: u32) -> Result<(), Tx8Error> {
@@ -245,7 +206,7 @@ impl Write for AbsoluteAddress {
 }
 
 #[derive(Copy, Clone, Debug)]
-struct RelativeAddress(u32);
+pub struct RelativeAddress(u32);
 
 impl Write for RelativeAddress {
     fn write(self, mem: &mut Memory, cpu: &mut Cpu, val: u32) -> Result<(), Tx8Error> {
@@ -258,7 +219,7 @@ impl Write for RelativeAddress {
 }
 
 #[derive(Copy, Clone, Debug)]
-struct Register(u8);
+pub struct Register(u8);
 
 // TODO: maybe extract mapping into its own function later
 impl Write for Register {
@@ -299,7 +260,7 @@ impl Write for Register {
 }
 
 #[derive(Copy, Clone, Debug)]
-struct RegisterAddress(u8);
+pub struct RegisterAddress(u8);
 
 impl Write for RegisterAddress {
     fn write(self, mem: &mut Memory, cpu: &mut Cpu, val: u32) -> Result<(), Tx8Error> {
@@ -337,16 +298,21 @@ impl Write for RegisterAddress {
 }
 
 #[derive(Clone, Copy, Debug)]
+pub enum Comparison {
+    None,
+    Equal,
+    NotEqual,
+    Greater,
+    GreaterEqual,
+    Less,
+    LessEqual,
+}
+
+#[derive(Clone, Copy, Debug)]
 pub enum Instruction {
     Halt,
     Nop,
-    Jump(Value),
-    JumpEqual(Value),
-    JumpNotEqual(Value),
-    JumpGreaterThan(Value),
-    JumpGreaterEqual(Value),
-    JumpLessThan(Value),
-    JumpLessEqual(Value),
+    Jump(Value, Comparison),
     CompareSigned(Value, Value),
     CompareFloat(Value, Value),
     CompareUnsigned(Value, Value),
@@ -372,22 +338,27 @@ impl Instruction {
         mem: &Memory,
     ) -> Result<Self, Tx8Error> {
         Ok(match op_code {
-            OpCode::Jump => Instruction::Jump(Value::from_par(first_par, cpu, mem)?),
-            OpCode::JumpEqual => Instruction::JumpEqual(Value::from_par(first_par, cpu, mem)?),
+            OpCode::Jump => {
+                Instruction::Jump(Value::from_par(first_par, cpu, mem)?, Comparison::None)
+            }
+            OpCode::JumpEqual => {
+                Instruction::Jump(Value::from_par(first_par, cpu, mem)?, Comparison::Equal)
+            }
             OpCode::JumpNotEqual => {
-                Instruction::JumpNotEqual(Value::from_par(first_par, cpu, mem)?)
+                Instruction::Jump(Value::from_par(first_par, cpu, mem)?, Comparison::NotEqual)
             }
             OpCode::JumpGreaterThan => {
-                Instruction::JumpGreaterThan(Value::from_par(first_par, cpu, mem)?)
+                Instruction::Jump(Value::from_par(first_par, cpu, mem)?, Comparison::Greater)
             }
-            OpCode::JumpGreaterEqual => {
-                Instruction::JumpGreaterEqual(Value::from_par(first_par, cpu, mem)?)
-            }
+            OpCode::JumpGreaterEqual => Instruction::Jump(
+                Value::from_par(first_par, cpu, mem)?,
+                Comparison::GreaterEqual,
+            ),
             OpCode::JumpLessThan => {
-                Instruction::JumpLessThan(Value::from_par(first_par, cpu, mem)?)
+                Instruction::Jump(Value::from_par(first_par, cpu, mem)?, Comparison::Less)
             }
             OpCode::JumpLessEqual => {
-                Instruction::JumpLessEqual(Value::from_par(first_par, cpu, mem)?)
+                Instruction::Jump(Value::from_par(first_par, cpu, mem)?, Comparison::LessEqual)
             }
             OpCode::CompareSigned => Instruction::CompareSigned(
                 Value::from_par(first_par, cpu, mem)?,
@@ -401,6 +372,8 @@ impl Instruction {
                 Value::from_par(first_par, cpu, mem)?,
                 Value::from_par(sec_par, cpu, mem)?,
             ),
+            OpCode::Call => Instruction::Call(Value::from_par(first_par, cpu, mem)?),
+            OpCode::SysCall => Instruction::SysCall(Value::from_par(first_par, cpu, mem)?),
             _ => unreachable!(),
         })
     }
@@ -409,13 +382,7 @@ impl Instruction {
         match self {
             Instruction::Halt => false,
             Instruction::Nop => true,
-            Instruction::Jump(_) => false,
-            Instruction::JumpEqual(_) => false,
-            Instruction::JumpNotEqual(_) => false,
-            Instruction::JumpGreaterThan(_) => false,
-            Instruction::JumpGreaterEqual(_) => false,
-            Instruction::JumpLessThan(_) => false,
-            Instruction::JumpLessEqual(_) => false,
+            Instruction::Jump(_, _) => false,
             Instruction::CompareSigned(_, _) => true,
             Instruction::CompareFloat(_, _) => true,
             Instruction::CompareUnsigned(_, _) => true,
@@ -424,4 +391,42 @@ impl Instruction {
             Instruction::Return => false,
         }
     }
+}
+fn parse_op_code(byte: u8) -> OpCode {
+    match byte {
+        0x00 => OpCode::Halt,
+        0x02 => OpCode::Jump,
+        0x03 => OpCode::JumpEqual,
+        0x04 => OpCode::JumpNotEqual,
+        0x05 => OpCode::JumpGreaterThan,
+        0x06 => OpCode::JumpGreaterEqual,
+        0x07 => OpCode::JumpLessThan,
+        0x08 => OpCode::JumpLessEqual,
+        0x09 => OpCode::CompareSigned,
+        0x0a => OpCode::CompareFloat,
+        0x0b => OpCode::CompareUnsigned,
+        0x0c => OpCode::Call,
+        0x0d => OpCode::Return,
+        0x0e => OpCode::SysCall,
+        _ => OpCode::Nop,
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+enum OpCode {
+    Halt,
+    Nop,
+    JumpGreaterThan,
+    JumpNotEqual,
+    JumpEqual,
+    Jump,
+    JumpGreaterEqual,
+    JumpLessThan,
+    JumpLessEqual,
+    CompareSigned,
+    CompareFloat,
+    CompareUnsigned,
+    Call,
+    Return,
+    SysCall,
 }
