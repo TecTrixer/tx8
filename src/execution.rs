@@ -49,11 +49,12 @@ impl<'a> Execution<'a> {
             Instruction::CompareSigned(val, val2) => self.compare_signed(val, val2.val),
             Instruction::CompareFloat(val, val2) => self.compare_float(val.val, val2.val),
             Instruction::CompareUnsigned(val, val2) => self.compare_unsigned(val.val, val2.val),
-            Instruction::Call(_) => todo!(),
+            Instruction::Call(val) => self.call(val, len),
             Instruction::SysCall(value) => self.sys_call(value.val)?,
-            Instruction::Return => todo!(),
-            Instruction::Load(to, val) => self.load(to, val.val)?,
+            Instruction::Return => self.ret(),
+            Instruction::Load(to, val) => self.load(to, val)?,
             Instruction::Push(val) => self.push(val),
+            Instruction::Pop(val) => self.pop(val)?,
         };
         Ok(Effect::None)
     }
@@ -102,8 +103,8 @@ impl<'a> Execution<'a> {
         self.cpu.r = i64::signum((val as i64) - (val2 as i64)) as u32;
     }
 
-    fn load(&mut self, to: Writable, val: u32) -> Result<(), Tx8Error> {
-        to.write(&mut self.memory, &mut self.cpu, val)
+    fn load(&mut self, to: Writable, val: Value) -> Result<(), Tx8Error> {
+        to.write_size(&mut self.memory, &mut self.cpu, val.val, val.size)
     }
 
     fn push(&mut self, val: Value) {
@@ -115,6 +116,27 @@ impl<'a> Execution<'a> {
                 .write_short(self.cpu.s, (val.val & 0xffff) as u16),
             Size::Int => self.memory.write_int(self.cpu.s, val.val),
         }
+    }
+
+    fn pop(&mut self, val: Writable) -> Result<(), Tx8Error> {
+        let value = match val.size() {
+            Size::Byte => self.memory.read_byte(self.cpu.s) as u32,
+            Size::Short => self.memory.read_short(self.cpu.s) as u32,
+            Size::Int => self.memory.read_int(self.cpu.s),
+        };
+        val.write(&mut self.memory, &mut self.cpu, value)?;
+        self.cpu.s += val.size().bytes();
+        Ok(())
+    }
+
+    fn call(&mut self, val: Value, len: u32) {
+        self.push(Value::new(self.cpu.p + len, Size::Int));
+        self.cpu.p = val.val;
+    }
+    fn ret(&mut self) {
+        let val = self.memory.read_int(self.cpu.s);
+        self.cpu.s += 4;
+        self.cpu.p = val;
     }
 }
 
