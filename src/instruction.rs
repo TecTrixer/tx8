@@ -70,6 +70,7 @@ pub enum Instruction {
     Push(Value),
     Pop(Writable),
     Add(Writable, Value, Value, Type),
+    Sub(Writable, Value, Value, Type),
     Mul(Writable, Value, Value, Type),
     DivMod(Writable, Value, Value, Type, bool),
     MaxMin(Writable, Value, Value, Type, bool),
@@ -202,7 +203,7 @@ impl Instruction {
             OpCode::StoreD => {
                 Instruction::Load(Writable::from_par(first_par)?, Value::new(cpu.d, Int))
             }
-            OpCode::Zero => Instruction::Load(Writable::from_par(first_par)?, Value::new(0, Byte)),
+            OpCode::Zero => Instruction::Load(Writable::from_par(first_par)?, Value::new(0, Int)),
             OpCode::Pop => Instruction::Pop(Writable::from_par(first_par)?),
             OpCode::LoadWord => Instruction::Load(
                 Writable::from_par(first_par)?,
@@ -218,10 +219,10 @@ impl Instruction {
                 Value::new(1, Int),
                 Type::Unsigned,
             ),
-            OpCode::Dec => Instruction::Add(
+            OpCode::Dec => Instruction::Sub(
                 Writable::from_par(first_par)?,
                 Value::from_par(first_par, cpu, mem, Byte)?,
-                Value::new(-1i32 as u32, Int),
+                Value::new(1, Int),
                 Type::Unsigned,
             ),
             OpCode::Add => Instruction::Add(
@@ -230,10 +231,10 @@ impl Instruction {
                 Value::from_par_signed(sec_par, cpu, mem, Byte)?,
                 Type::Signed,
             ),
-            OpCode::Sub => Instruction::Add(
+            OpCode::Sub => Instruction::Sub(
                 Writable::from_par(first_par)?,
                 Value::from_par_signed(first_par, cpu, mem, Byte)?,
-                Value::from_par_signed(sec_par, cpu, mem, Byte)?.neg(),
+                Value::from_par_signed(sec_par, cpu, mem, Byte)?,
                 Type::Signed,
             ),
             OpCode::Mul => Instruction::Mul(
@@ -288,10 +289,10 @@ impl Instruction {
                 Value::from_par(sec_par, cpu, mem, Byte)?,
                 Type::Unsigned,
             ),
-            OpCode::SubUnsigned => Instruction::Add(
+            OpCode::SubUnsigned => Instruction::Sub(
                 Writable::from_par(first_par)?,
                 Value::from_par(first_par, cpu, mem, Byte)?,
-                Value::from_par(sec_par, cpu, mem, Byte)?.neg(),
+                Value::from_par(sec_par, cpu, mem, Byte)?,
                 Type::Unsigned,
             ),
             OpCode::MulUnsigned => Instruction::Mul(
@@ -334,10 +335,10 @@ impl Instruction {
                 Value::new(f32::to_bits(1.0), Int),
                 Type::Float,
             ),
-            OpCode::DecFloat => Instruction::Add(
+            OpCode::DecFloat => Instruction::Sub(
                 Writable::from_par(first_par)?,
                 Value::from_par(first_par, cpu, mem, Byte)?,
-                Value::new(f32::to_bits(-1.0), Int),
+                Value::new(f32::to_bits(1.0), Int),
                 Type::Float,
             ),
             OpCode::AddFloat => Instruction::Add(
@@ -346,10 +347,10 @@ impl Instruction {
                 Value::from_par(sec_par, cpu, mem, Byte)?,
                 Type::Float,
             ),
-            OpCode::SubFloat => Instruction::Add(
+            OpCode::SubFloat => Instruction::Sub(
                 Writable::from_par(first_par)?,
                 Value::from_par(first_par, cpu, mem, Byte)?,
-                Value::from_par(sec_par, cpu, mem, Byte)?.fneg(),
+                Value::from_par(sec_par, cpu, mem, Byte)?,
                 Type::Float,
             ),
             OpCode::MulFloat => Instruction::Mul(

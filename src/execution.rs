@@ -27,6 +27,7 @@ impl<'a> Execution<'a> {
             "test_ai",
             "test_rf",
             "test_r",
+            "test_ri",
         ];
         for sys_call in sys_calls {
             sys_call_map.insert(hash(sys_call), sys_call);
@@ -67,6 +68,7 @@ impl<'a> Execution<'a> {
             Instruction::Push(val) => self.push(val),
             Instruction::Pop(val) => self.pop(val)?,
             Instruction::Add(to, val, val2, kind) => self.add(to, val, val2, kind)?,
+            Instruction::Sub(to, val, val2, kind) => self.sub(to, val, val2, kind)?,
             Instruction::Mul(to, val, val2, kind) => self.mul(to, val, val2, kind)?,
             Instruction::DivMod(to, val, val2, kind, is_div) => {
                 self.div(to, val, val2, kind, is_div)?
@@ -118,6 +120,7 @@ impl<'a> Execution<'a> {
                 "test_ai" => println!("{}", self.cpu.a as i32),
                 "test_rf" => println!("{}", f32::from_bits(self.cpu.r)),
                 "test_r" => println!("{:x}", self.cpu.r),
+                "test_ri" => println!("{}", self.cpu.r as i32),
                 _ => return Err(Tx8Error::InvalidSysCall),
             }
             Ok(())
@@ -201,8 +204,28 @@ impl<'a> Execution<'a> {
         second: Value,
         kind: Type,
     ) -> Result<(), Tx8Error> {
-        let (res_signed, overflow_signed) = (first.val as i32).overflowing_add(second.val as i32);
-        let (res, overflow) = first.val.overflowing_add(second.val);
+        let (res_signed, overflow_signed) = match to.size() {
+            Size::Byte => {
+                let (res, over) = (first.val as i8).overflowing_add(second.val as i8);
+                (res as i32, over)
+            }
+            Size::Short => {
+                let (res, over) = (first.val as i16).overflowing_add(second.val as i16);
+                (res as i32, over)
+            }
+            Size::Int => (first.val as i32).overflowing_add(second.val as i32),
+        };
+        let (res, overflow) = match to.size() {
+            Size::Byte => {
+                let (res, over) = (first.val as u8).overflowing_add(second.val as u8);
+                (res as u32, over)
+            }
+            Size::Short => {
+                let (res, over) = (first.val as u16).overflowing_add(second.val as u16);
+                (res as u32, over)
+            }
+            Size::Int => first.val.overflowing_add(second.val),
+        };
 
         match kind {
             Type::Signed => to.write(&mut self.memory, &mut self.cpu, res_signed as u32)?,
@@ -214,7 +237,50 @@ impl<'a> Execution<'a> {
             }
         }
 
-        self.cpu.r = if overflow { 0x1 } else { 0x0 } | if overflow_signed { 0x10 } else { 0x0 };
+        self.cpu.r = if overflow { 0b1 } else { 0b0 } | if overflow_signed { 0b10 } else { 0b0 };
+        Ok(())
+    }
+    fn sub(
+        &mut self,
+        to: Writable,
+        first: Value,
+        second: Value,
+        kind: Type,
+    ) -> Result<(), Tx8Error> {
+        let (res_signed, overflow_signed) = match to.size() {
+            Size::Byte => {
+                let (res, over) = (first.val as i8).overflowing_sub(second.val as i8);
+                (res as i32, over)
+            }
+            Size::Short => {
+                let (res, over) = (first.val as i16).overflowing_sub(second.val as i16);
+                (res as i32, over)
+            }
+            Size::Int => (first.val as i32).overflowing_sub(second.val as i32),
+        };
+        let (res, overflow) = match to.size() {
+            Size::Byte => {
+                let (res, over) = (first.val as u8).overflowing_sub(second.val as u8);
+                (res as u32, over)
+            }
+            Size::Short => {
+                let (res, over) = (first.val as u16).overflowing_sub(second.val as u16);
+                (res as u32, over)
+            }
+            Size::Int => first.val.overflowing_sub(second.val),
+        };
+
+        match kind {
+            Type::Signed => to.write(&mut self.memory, &mut self.cpu, res_signed as u32)?,
+            Type::Unsigned => to.write(&mut self.memory, &mut self.cpu, res)?,
+            Type::Float => {
+                let res = f32::to_bits(f32::from_bits(first.val) - f32::from_bits(second.val));
+                to.write(&mut self.memory, &mut self.cpu, res)?;
+                return Ok(());
+            }
+        }
+
+        self.cpu.r = if overflow { 0b1 } else { 0b0 } | if overflow_signed { 0b10 } else { 0b0 };
         Ok(())
     }
 
@@ -398,7 +464,11 @@ impl<'a> Execution<'a> {
             Size::Int => 0b11111,
         };
         let shift_amount = val2.val & filter;
-        let res = val.val as i32 >> shift_amount;
+        let res = match to.size() {
+            Size::Byte => (val.val as i8 >> shift_amount) as i32,
+            Size::Short => (val.val as i16 >> shift_amount) as i32,
+            Size::Int => val.val as i32 >> shift_amount,
+        };
         let shifted_out = val.val & ((1 << shift_amount) - 1);
         to.write(&mut self.memory, &mut self.cpu, res as u32)?;
         self.cpu.r = shifted_out;
@@ -424,19 +494,21 @@ impl<'a> Execution<'a> {
     }
 
     fn ror(&mut self, to: Writable, val: Value, val2: Value) -> Result<(), Tx8Error> {
-        to.write(
-            &mut self.memory,
-            &mut self.cpu,
-            val.val.rotate_right(val2.val),
-        )
+        let res = match to.size() {
+            Size::Byte => (val.val as u8).rotate_right(val2.val) as u32,
+            Size::Short => (val.val as u16).rotate_right(val2.val) as u32,
+            Size::Int => val.val.rotate_right(val2.val),
+        };
+        to.write(&mut self.memory, &mut self.cpu, res)
     }
 
     fn rol(&mut self, to: Writable, val: Value, val2: Value) -> Result<(), Tx8Error> {
-        to.write(
-            &mut self.memory,
-            &mut self.cpu,
-            val.val.rotate_left(val2.val),
-        )
+        let res = match to.size() {
+            Size::Byte => (val.val as u8).rotate_left(val2.val) as u32,
+            Size::Short => (val.val as u16).rotate_left(val2.val) as u32,
+            Size::Int => val.val.rotate_left(val2.val),
+        };
+        to.write(&mut self.memory, &mut self.cpu, res)
     }
 
     fn set(&mut self, to: Writable, val: Value, val2: Value) -> Result<(), Tx8Error> {

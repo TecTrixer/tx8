@@ -208,15 +208,6 @@ impl Value {
             }
         }
     }
-
-    pub fn neg(mut self) -> Value {
-        self.val = (-1 * (self.val as i32)) as u32;
-        self
-    }
-    pub fn fneg(mut self) -> Value {
-        self.val = f32::to_bits(-1.0 * f32::from_bits(self.val));
-        self
-    }
 }
 
 fn get_reg_size(byte: u8) -> Size {
@@ -391,8 +382,15 @@ impl Write for Register {
         _: &mut Memory,
         cpu: &mut Cpu,
         val: u32,
-        size: Size,
+        _size: Size,
     ) -> Result<(), Tx8Error> {
+        // NOTE: ignoring the size, works if write_size is only being called by load
+        let size = match self.0 & 0xf0 {
+            0x00 => Int,
+            0x20 => Short,
+            0x10 => Byte,
+            _ => return Err(Tx8Error::InvalidRegister),
+        };
         let (mask, mask2) = match size {
             Byte => (0xffffff00, 0xff),
             Short => (0xffff0000, 0xffff),
