@@ -1,5 +1,3 @@
-use crate::Tx8Error;
-
 const MB_16: usize = 16_777_216;
 const MB_4: usize = 4_194_304;
 
@@ -42,11 +40,11 @@ impl Memory {
         Memory { array }
     }
     pub fn read_byte(&self, ptr: u32) -> u8 {
-        let ptr = truncate_ptr(ptr);
         self.read(ptr)
     }
 
-    pub fn read(&self, ptr: usize) -> u8 {
+    pub fn read(&self, ptr: u32) -> u8 {
+        let ptr = truncate_ptr(ptr);
         // If the pointer is out of bounds return 0, otherwise the byte
         match self.array.get(ptr) {
             Some(byte) => *byte,
@@ -55,19 +53,14 @@ impl Memory {
     }
 
     pub fn read_short(&self, ptr: u32) -> u16 {
-        let ptr = truncate_ptr(ptr);
-
         let bytes = [self.read(ptr), self.read(ptr + 1)];
         u16::from_le_bytes(bytes)
     }
     pub fn read_24bit(&self, ptr: u32) -> u32 {
-        let ptr = truncate_ptr(ptr);
         let bytes = [self.read(ptr), self.read(ptr + 1), self.read(ptr + 2), 0];
         u32::from_le_bytes(bytes)
     }
     pub fn read_int(&self, ptr: u32) -> u32 {
-        let ptr = truncate_ptr(ptr);
-
         let bytes = [
             self.read(ptr),
             self.read(ptr + 1),
@@ -77,32 +70,25 @@ impl Memory {
         u32::from_le_bytes(bytes)
     }
 
-    pub fn write(&mut self, ptr: usize, val: u8) -> Result<(), Tx8Error> {
-        if ptr >= self.array.len() {
-            Err(Tx8Error::OutOfBoundsWrite)
-        } else {
-            self.array[ptr] = val;
-            Ok(())
-        }
+    pub fn write(&mut self, ptr: u32, val: u8) {
+        let ptr = truncate_ptr(ptr);
+        self.array[ptr] = val;
     }
 
-    pub fn write_byte(&mut self, ptr: u32, val: u8) -> Result<(), Tx8Error> {
-        let ptr = truncate_ptr(ptr);
+    pub fn write_byte(&mut self, ptr: u32, val: u8) {
         self.write(ptr, val)
     }
-    pub fn write_short(&mut self, ptr: u32, val: u16) -> Result<(), Tx8Error> {
-        let ptr = truncate_ptr(ptr);
+    pub fn write_short(&mut self, ptr: u32, val: u16) {
         let [first, second] = val.to_le_bytes();
-        self.write(ptr, first)?;
-        self.write(ptr + 1, second)
+        self.write(ptr, first);
+        self.write(ptr + 1, second);
     }
-    pub fn write_int(&mut self, ptr: u32, val: u32) -> Result<(), Tx8Error> {
-        let ptr = truncate_ptr(ptr);
+    pub fn write_int(&mut self, ptr: u32, val: u32) {
         let [first, second, third, fourth] = val.to_le_bytes();
-        self.write(ptr, first)?;
-        self.write(ptr + 1, second)?;
-        self.write(ptr + 2, third)?;
-        self.write(ptr + 3, fourth)
+        self.write(ptr, first);
+        self.write(ptr + 1, second);
+        self.write(ptr + 2, third);
+        self.write(ptr + 3, fourth);
     }
 }
 

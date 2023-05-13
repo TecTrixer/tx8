@@ -5,10 +5,6 @@ pub fn parse_instruction(
     mem: &Memory,
     ptr: u32,
 ) -> Result<(Instruction, u32), Tx8Error> {
-    // instruction pointer is too large
-    if ptr > 0xfffff0 {
-        return Err(Tx8Error::InstructionError);
-    }
     let mut len = 0;
 
     // Read OpCode
@@ -222,7 +218,8 @@ pub struct AbsoluteAddress(u32);
 
 impl Write for AbsoluteAddress {
     fn write(self, mem: &mut Memory, _: &mut Cpu, val: u32) -> Result<(), Tx8Error> {
-        mem.write_int(self.0, val)
+        mem.write_int(self.0, val);
+        Ok(())
     }
     fn size(&self) -> Size {
         Size::Int
@@ -235,7 +232,8 @@ pub struct RelativeAddress(u32);
 impl Write for RelativeAddress {
     fn write(self, mem: &mut Memory, cpu: &mut Cpu, val: u32) -> Result<(), Tx8Error> {
         let ptr = self.0 + cpu.o;
-        mem.write_int(ptr, val)
+        mem.write_int(ptr, val);
+        Ok(())
     }
     fn size(&self) -> Size {
         Size::Int
@@ -313,8 +311,9 @@ impl Write for RegisterAddress {
             0x25 => mem.write_int(cpu.o & 0xffff, val),
             0x26 => mem.write_int(cpu.p & 0xffff, val),
             0x27 => mem.write_int(cpu.s & 0xffff, val),
-            _ => Err(Tx8Error::InvalidRegister),
+            _ => return Err(Tx8Error::InvalidRegister),
         }
+        Ok(())
     }
     fn size(&self) -> Size {
         Size::Int

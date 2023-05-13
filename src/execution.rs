@@ -53,7 +53,7 @@ impl<'a> Execution<'a> {
             Instruction::SysCall(value) => self.sys_call(value.val)?,
             Instruction::Return => todo!(),
             Instruction::Load(to, val) => self.load(to, val.val)?,
-            Instruction::Push(val) => self.push(val)?,
+            Instruction::Push(val) => self.push(val),
         };
         Ok(Effect::None)
     }
@@ -106,7 +106,7 @@ impl<'a> Execution<'a> {
         to.write(&mut self.memory, &mut self.cpu, val)
     }
 
-    fn push(&mut self, val: Value) -> Result<(), Tx8Error> {
+    fn push(&mut self, val: Value) {
         self.cpu.s -= val.size.bytes();
         match val.size {
             Size::Byte => self.memory.write_byte(self.cpu.s, (val.val & 0xff) as u8),
