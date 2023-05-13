@@ -1,5 +1,8 @@
-const MB_16: usize = 16_777_216;
-const MB_4: usize = 4_194_304;
+use crate::Tx8Error;
+
+const MB_16: usize = 1 << 24;
+const MB_8: usize = 1 << 23;
+const MB_4: usize = 1 << 22;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Cpu {
@@ -34,10 +37,13 @@ pub struct Memory {
 }
 
 impl Memory {
-    pub fn load_rom(data: &[u8]) -> Self {
+    pub fn load_rom(data: &[u8]) -> Result<Self, Tx8Error> {
+        if data.len() > MB_8 {
+            return Err(Tx8Error::ParseError);
+        }
         let mut array = vec![0; MB_16];
         array[MB_4..MB_4 + data.len()].copy_from_slice(data);
-        Memory { array }
+        Ok(Memory { array })
     }
     pub fn read_byte(&self, ptr: u32) -> u8 {
         self.read(ptr)

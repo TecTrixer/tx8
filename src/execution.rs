@@ -15,7 +15,7 @@ pub struct Execution<'a> {
 }
 
 impl<'a> Execution<'a> {
-    pub fn new_with_rom(data: &[u8]) -> Self {
+    pub fn new_with_rom(data: &[u8]) -> Result<Self, Tx8Error> {
         let mut sys_call_map = HashMap::new();
         let sys_calls = [
             "print_u32",
@@ -28,11 +28,11 @@ impl<'a> Execution<'a> {
         for sys_call in sys_calls {
             sys_call_map.insert(hash(sys_call), sys_call);
         }
-        Execution {
+        Ok(Execution {
             cpu: Cpu::new(),
-            memory: Memory::load_rom(data),
+            memory: Memory::load_rom(data)?,
             sys_call_map,
-        }
+        })
     }
     pub fn next_step(&mut self) -> Result<Effect, Tx8Error> {
         let (instruction, len) = parse_instruction(&self.cpu, &self.memory, self.cpu.p)?;
