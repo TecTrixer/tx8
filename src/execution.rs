@@ -2,7 +2,8 @@ use std::collections::HashMap;
 
 use crate::{
     hardware::{Cpu, Memory},
-    instruction::{parse_instruction, Comparison, Instruction, Size, Value, Writable, Write},
+    instruction::{parse_instruction, Comparison, Instruction},
+    parameter::{Size, Value, Writable, Write},
     Tx8Error,
 };
 
