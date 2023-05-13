@@ -88,6 +88,19 @@ pub enum Instruction {
     Clear(Writable, Value, Value),
     Toggle(Writable, Value, Value),
     Test(Value, Value),
+    Sin(Writable, Value),
+    Cos(Writable, Value),
+    Tan(Writable, Value),
+    ArcSin(Writable, Value),
+    ArcCos(Writable, Value),
+    ArcTan(Writable, Value),
+    ArcTan2(Writable, Value, Value),
+    Sqrt(Writable, Value),
+    Pow(Writable, Value, Value),
+    Exp(Writable, Value),
+    Log(Writable, Value),
+    Log2(Writable, Value),
+    Log10(Writable, Value),
 }
 
 impl Instruction {
@@ -453,6 +466,60 @@ impl Instruction {
                 Value::from_par(first_par, cpu, mem, Byte)?,
                 Value::from_par(sec_par, cpu, mem, Byte)?,
             ),
+            OpCode::Sin => Instruction::Sin(
+                Writable::from_par(first_par)?,
+                Value::from_par(first_par, cpu, mem, Byte)?,
+            ),
+            OpCode::Cos => Instruction::Cos(
+                Writable::from_par(first_par)?,
+                Value::from_par(first_par, cpu, mem, Byte)?,
+            ),
+            OpCode::Tan => Instruction::Tan(
+                Writable::from_par(first_par)?,
+                Value::from_par(first_par, cpu, mem, Byte)?,
+            ),
+            OpCode::ArcSin => Instruction::ArcSin(
+                Writable::from_par(first_par)?,
+                Value::from_par(first_par, cpu, mem, Byte)?,
+            ),
+            OpCode::ArcCos => Instruction::ArcCos(
+                Writable::from_par(first_par)?,
+                Value::from_par(first_par, cpu, mem, Byte)?,
+            ),
+            OpCode::ArcTan => Instruction::ArcTan(
+                Writable::from_par(first_par)?,
+                Value::from_par(first_par, cpu, mem, Byte)?,
+            ),
+            OpCode::ArcTan2 => Instruction::ArcTan2(
+                Writable::from_par(first_par)?,
+                Value::from_par(first_par, cpu, mem, Byte)?,
+                Value::from_par(sec_par, cpu, mem, Byte)?,
+            ),
+            OpCode::Sqrt => Instruction::Sqrt(
+                Writable::from_par(first_par)?,
+                Value::from_par(first_par, cpu, mem, Byte)?,
+            ),
+            OpCode::Pow => Instruction::Pow(
+                Writable::from_par(first_par)?,
+                Value::from_par(first_par, cpu, mem, Byte)?,
+                Value::from_par(sec_par, cpu, mem, Byte)?,
+            ),
+            OpCode::Exp => Instruction::Exp(
+                Writable::from_par(first_par)?,
+                Value::from_par(first_par, cpu, mem, Byte)?,
+            ),
+            OpCode::Log => Instruction::Log(
+                Writable::from_par(first_par)?,
+                Value::from_par(first_par, cpu, mem, Byte)?,
+            ),
+            OpCode::Log2 => Instruction::Log2(
+                Writable::from_par(first_par)?,
+                Value::from_par(first_par, cpu, mem, Byte)?,
+            ),
+            OpCode::Log10 => Instruction::Log10(
+                Writable::from_par(first_par)?,
+                Value::from_par(first_par, cpu, mem, Byte)?,
+            ),
         })
     }
 
@@ -534,6 +601,19 @@ fn parse_op_code(byte: u8) -> Result<OpCode, Tx8Error> {
         0x48 => OpCode::MinFloat,
         0x49 => OpCode::AbsFloat,
         0x4a => OpCode::SignFloat,
+        0x4b => OpCode::Sin,
+        0x4c => OpCode::Cos,
+        0x4d => OpCode::Tan,
+        0x4e => OpCode::ArcSin,
+        0x4f => OpCode::ArcCos,
+        0x50 => OpCode::ArcTan,
+        0x51 => OpCode::ArcTan2,
+        0x52 => OpCode::Sqrt,
+        0x53 => OpCode::Pow,
+        0x54 => OpCode::Exp,
+        0x55 => OpCode::Log,
+        0x56 => OpCode::Log2,
+        0x57 => OpCode::Log10,
         0x60 => OpCode::AddUnsigned,
         0x61 => OpCode::SubUnsigned,
         0x62 => OpCode::MulUnsigned,
@@ -620,4 +700,17 @@ enum OpCode {
     MinFloat,
     AbsFloat,
     SignFloat,
+    Sin,
+    Cos,
+    Tan,
+    ArcSin,
+    ArcCos,
+    ArcTan,
+    ArcTan2,
+    Sqrt,
+    Pow,
+    Exp,
+    Log,
+    Log2,
+    Log10,
 }

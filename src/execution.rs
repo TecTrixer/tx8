@@ -89,6 +89,19 @@ impl<'a> Execution<'a> {
             Instruction::Clear(to, val, val2) => self.clear(to, val, val2)?,
             Instruction::Toggle(to, val, val2) => self.toggle(to, val, val2)?,
             Instruction::Test(val, val2) => self.test(val, val2),
+            Instruction::Sin(to, val) => self.sin(to, val)?,
+            Instruction::Cos(to, val) => self.cos(to, val)?,
+            Instruction::Tan(to, val) => self.tan(to, val)?,
+            Instruction::ArcSin(to, val) => self.arcsin(to, val)?,
+            Instruction::ArcCos(to, val) => self.arccos(to, val)?,
+            Instruction::ArcTan(to, val) => self.arctan(to, val)?,
+            Instruction::ArcTan2(to, val, val2) => self.arctan2(to, val, val2)?,
+            Instruction::Sqrt(to, val) => self.sqrt(to, val)?,
+            Instruction::Pow(to, val, val2) => self.pow(to, val, val2)?,
+            Instruction::Exp(to, val) => self.exp(to, val)?,
+            Instruction::Log(to, val) => self.log(to, val)?,
+            Instruction::Log2(to, val) => self.log2(to, val)?,
+            Instruction::Log10(to, val) => self.log10(to, val)?,
         };
         Ok(Effect::None)
     }
@@ -493,6 +506,71 @@ impl<'a> Execution<'a> {
         } else {
             self.cpu.r = 0;
         }
+    }
+
+    fn sin(&mut self, to: Writable, val: Value) -> Result<(), Tx8Error> {
+        let res = f32::from_bits(val.val).sin();
+        to.write(&mut self.memory, &mut self.cpu, f32::to_bits(res))
+    }
+
+    fn cos(&mut self, to: Writable, val: Value) -> Result<(), Tx8Error> {
+        let res = f32::from_bits(val.val).cos();
+        to.write(&mut self.memory, &mut self.cpu, f32::to_bits(res))
+    }
+
+    fn tan(&mut self, to: Writable, val: Value) -> Result<(), Tx8Error> {
+        let res = f32::from_bits(val.val).tan();
+        to.write(&mut self.memory, &mut self.cpu, f32::to_bits(res))
+    }
+
+    fn arcsin(&mut self, to: Writable, val: Value) -> Result<(), Tx8Error> {
+        let res = f32::from_bits(val.val).asin();
+        to.write(&mut self.memory, &mut self.cpu, f32::to_bits(res))
+    }
+
+    fn arccos(&mut self, to: Writable, val: Value) -> Result<(), Tx8Error> {
+        let res = f32::from_bits(val.val).acos();
+        to.write(&mut self.memory, &mut self.cpu, f32::to_bits(res))
+    }
+
+    fn arctan(&mut self, to: Writable, val: Value) -> Result<(), Tx8Error> {
+        let res = f32::from_bits(val.val).atan();
+        to.write(&mut self.memory, &mut self.cpu, f32::to_bits(res))
+    }
+
+    fn arctan2(&mut self, to: Writable, val: Value, val2: Value) -> Result<(), Tx8Error> {
+        let res = f32::from_bits(val.val).atan2(f32::from_bits(val2.val));
+        to.write(&mut self.memory, &mut self.cpu, f32::to_bits(res))
+    }
+
+    fn sqrt(&mut self, to: Writable, val: Value) -> Result<(), Tx8Error> {
+        let res = f32::from_bits(val.val).sqrt();
+        to.write(&mut self.memory, &mut self.cpu, f32::to_bits(res))
+    }
+
+    fn pow(&mut self, to: Writable, val: Value, val2: Value) -> Result<(), Tx8Error> {
+        let res = f32::from_bits(val.val).powf(f32::from_bits(val2.val));
+        to.write(&mut self.memory, &mut self.cpu, f32::to_bits(res))
+    }
+
+    fn exp(&mut self, to: Writable, val: Value) -> Result<(), Tx8Error> {
+        let res = f32::from_bits(val.val).exp();
+        to.write(&mut self.memory, &mut self.cpu, f32::to_bits(res))
+    }
+
+    fn log(&mut self, to: Writable, val: Value) -> Result<(), Tx8Error> {
+        let res = f32::from_bits(val.val).ln();
+        to.write(&mut self.memory, &mut self.cpu, f32::to_bits(res))
+    }
+
+    fn log2(&mut self, to: Writable, val: Value) -> Result<(), Tx8Error> {
+        let res = f32::from_bits(val.val).log2();
+        to.write(&mut self.memory, &mut self.cpu, f32::to_bits(res))
+    }
+
+    fn log10(&mut self, to: Writable, val: Value) -> Result<(), Tx8Error> {
+        let res = f32::from_bits(val.val).log10();
+        to.write(&mut self.memory, &mut self.cpu, f32::to_bits(res))
     }
 }
 
