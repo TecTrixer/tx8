@@ -56,6 +56,14 @@ impl<'a> Execution<'a> {
             Instruction::Load(to, val) => self.load(to, val)?,
             Instruction::Push(val) => self.push(val),
             Instruction::Pop(val) => self.pop(val)?,
+            Instruction::Add(to, val, val2, signed) => self.add(to, val, val2, signed)?,
+            Instruction::Mul(to, val, val2, signed) => self.mul(to, val, val2, signed)?,
+            Instruction::Div(_, _, _) => todo!(),
+            Instruction::Mod(_, _, _) => todo!(),
+            Instruction::Max(_, _, _) => todo!(),
+            Instruction::Min(_, _, _) => todo!(),
+            Instruction::Abs(_, _) => todo!(),
+            Instruction::Sign(_, _) => todo!(),
         };
         Ok(Effect::None)
     }
@@ -138,6 +146,39 @@ impl<'a> Execution<'a> {
         let val = self.memory.read_int(self.cpu.s);
         self.cpu.s += 4;
         self.cpu.p = val;
+    }
+
+    fn add(
+        &mut self,
+        to: Writable,
+        first: Value,
+        second: Value,
+        signed: bool,
+    ) -> Result<(), Tx8Error> {
+        let (res_signed, overflow_signed) = (first.val as i32).overflowing_add(second.val as i32);
+        let (res, overflow) = first.val.overflowing_add(second.val);
+
+        if signed {
+            to.write(&mut self.memory, &mut self.cpu, res_signed as u32)?;
+        } else {
+            to.write(&mut self.memory, &mut self.cpu, res)?;
+        }
+
+        self.cpu.r = if overflow { 0x1 } else { 0x0 } | if overflow_signed { 0x10 } else { 0x0 };
+        Ok(())
+    }
+
+    fn mul(&mut self, to: Writable, val: Value, val2: Value, signed: bool) -> Result<(), Tx8Error> {
+        if signed {
+            let res = val.val as i32 as i64 * val2.val as i32 as i64;
+            to.write(&mut self.memory, &mut self.cpu, res as u32)?;
+            self.cpu.r = (res >> 32) as u32;
+        } else {
+            let res = val.val as u64 * val2.val as u64;
+            to.write(&mut self.memory, &mut self.cpu, res as u32)?;
+            self.cpu.r = (res >> 32) as u32;
+        }
+        Ok(())
     }
 }
 

@@ -208,6 +208,11 @@ impl Value {
             }
         }
     }
+
+    pub fn neg(mut self) -> Value {
+        self.val = (-1 * (self.val as i32)) as u32;
+        self
+    }
 }
 
 fn get_reg_size(byte: u8) -> Size {

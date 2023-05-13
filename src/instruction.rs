@@ -62,6 +62,14 @@ pub enum Instruction {
     Load(Writable, Value),
     Push(Value),
     Pop(Writable),
+    Add(Writable, Value, Value, bool),
+    Mul(Writable, Value, Value, bool),
+    Div(Writable, Value, Value),
+    Mod(Writable, Value, Value),
+    Max(Writable, Value, Value),
+    Min(Writable, Value, Value),
+    Abs(Writable, Value),
+    Sign(Writable, Value),
 }
 
 impl Instruction {
@@ -173,23 +181,74 @@ impl Instruction {
                 Writable::from_par(first_par)?,
                 Value::from_par_signed(sec_par, cpu, mem, Int)?,
             ),
+            OpCode::Inc => Instruction::Add(
+                Writable::from_par(first_par)?,
+                Value::from_par(first_par, cpu, mem, Byte)?,
+                Value::new(1, Int),
+                false,
+            ),
+            OpCode::Dec => Instruction::Add(
+                Writable::from_par(first_par)?,
+                Value::from_par(first_par, cpu, mem, Byte)?,
+                Value::new(-1i32 as u32, Int),
+                false,
+            ),
+            OpCode::Add => Instruction::Add(
+                Writable::from_par(first_par)?,
+                Value::from_par_signed(first_par, cpu, mem, Byte)?,
+                Value::from_par_signed(sec_par, cpu, mem, Byte)?,
+                true,
+            ),
+            OpCode::Sub => Instruction::Add(
+                Writable::from_par(first_par)?,
+                Value::from_par_signed(first_par, cpu, mem, Byte)?,
+                Value::from_par_signed(sec_par, cpu, mem, Byte)?.neg(),
+                true,
+            ),
+            OpCode::Mul => Instruction::Mul(
+                Writable::from_par(first_par)?,
+                Value::from_par_signed(first_par, cpu, mem, Byte)?,
+                Value::from_par_signed(sec_par, cpu, mem, Byte)?,
+                true,
+            ),
+            OpCode::Div => Instruction::Div(
+                Writable::from_par(first_par)?,
+                Value::from_par_signed(first_par, cpu, mem, Byte)?,
+                Value::from_par_signed(sec_par, cpu, mem, Byte)?,
+            ),
+            OpCode::Mod => Instruction::Mod(
+                Writable::from_par(first_par)?,
+                Value::from_par_signed(first_par, cpu, mem, Byte)?,
+                Value::from_par_signed(sec_par, cpu, mem, Byte)?,
+            ),
+            OpCode::Max => Instruction::Max(
+                Writable::from_par(first_par)?,
+                Value::from_par_signed(first_par, cpu, mem, Byte)?,
+                Value::from_par_signed(sec_par, cpu, mem, Byte)?,
+            ),
+            OpCode::Min => Instruction::Min(
+                Writable::from_par(first_par)?,
+                Value::from_par_signed(first_par, cpu, mem, Byte)?,
+                Value::from_par_signed(sec_par, cpu, mem, Byte)?,
+            ),
+            OpCode::Abs => Instruction::Abs(
+                Writable::from_par(first_par)?,
+                Value::from_par_signed(first_par, cpu, mem, Byte)?,
+            ),
+            OpCode::Sign => Instruction::Sign(
+                Writable::from_par(first_par)?,
+                Value::from_par_signed(first_par, cpu, mem, Byte)?,
+            ),
         })
     }
 
     pub fn increase_program_counter(&self) -> bool {
         match self {
             Instruction::Halt => false,
-            Instruction::Nop => true,
             Instruction::Jump(_, _) => false,
-            Instruction::CompareSigned(_, _) => true,
-            Instruction::CompareFloat(_, _) => true,
-            Instruction::CompareUnsigned(_, _) => true,
             Instruction::Call(_) => false,
-            Instruction::SysCall(_) => true,
             Instruction::Return => false,
-            Instruction::Load(_, _) => true,
-            Instruction::Push(_) => true,
-            Instruction::Pop(_) => false,
+            _ => true,
         }
     }
 }
@@ -225,7 +284,18 @@ fn parse_op_code(byte: u8) -> Result<OpCode, Tx8Error> {
         0x1c => OpCode::Zero,
         0x1d => OpCode::Push,
         0x1e => OpCode::Pop,
-        _ => return Err(Tx8Error::InvalidOpCode),
+        0x20 => OpCode::Inc,
+        0x21 => OpCode::Dec,
+        0x22 => OpCode::Add,
+        0x23 => OpCode::Sub,
+        0x24 => OpCode::Mul,
+        0x25 => OpCode::Div,
+        0x26 => OpCode::Mod,
+        0x27 => OpCode::Max,
+        0x28 => OpCode::Min,
+        0x29 => OpCode::Abs,
+        0x2a => OpCode::Sign,
+        _ => OpCode::Nop,
     })
 }
 
@@ -261,4 +331,15 @@ enum OpCode {
     Zero,
     Push,
     Pop,
+    Inc,
+    Dec,
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Mod,
+    Max,
+    Min,
+    Abs,
+    Sign,
 }
