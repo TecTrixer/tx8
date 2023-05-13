@@ -1,8 +1,8 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, ops::Neg};
 
 use crate::{
     hardware::{Cpu, Memory},
-    instruction::{parse_instruction, Comparison, Instruction},
+    instruction::{parse_instruction, Comparison, Instruction, Type},
     parameter::{Size, Value, Writable, Write},
     Tx8Error,
 };
@@ -17,7 +17,7 @@ pub struct Execution<'a> {
 impl<'a> Execution<'a> {
     pub fn new_with_rom(data: &[u8]) -> Self {
         let mut sys_call_map = HashMap::new();
-        let sys_calls = ["print_u32"];
+        let sys_calls = ["print_u32", "print_i32", "print"];
         for sys_call in sys_calls {
             sys_call_map.insert(hash(sys_call), sys_call);
         }
@@ -56,14 +56,15 @@ impl<'a> Execution<'a> {
             Instruction::Load(to, val) => self.load(to, val)?,
             Instruction::Push(val) => self.push(val),
             Instruction::Pop(val) => self.pop(val)?,
-            Instruction::Add(to, val, val2, signed) => self.add(to, val, val2, signed)?,
-            Instruction::Mul(to, val, val2, signed) => self.mul(to, val, val2, signed)?,
-            Instruction::Div(_, _, _) => todo!(),
-            Instruction::Mod(_, _, _) => todo!(),
-            Instruction::Max(_, _, _) => todo!(),
-            Instruction::Min(_, _, _) => todo!(),
-            Instruction::Abs(_, _) => todo!(),
-            Instruction::Sign(_, _) => todo!(),
+            Instruction::Add(to, val, val2, kind) => self.add(to, val, val2, kind)?,
+            Instruction::Mul(to, val, val2, kind) => self.mul(to, val, val2, kind)?,
+            Instruction::DivMod(to, val, val2, kind, is_div) => {
+                self.div(to, val, val2, kind, is_div)?
+            }
+            Instruction::MaxMin(to, val, val2, kind, is_max) => {
+                self.max_min(to, val, val2, kind, is_max)?
+            }
+            Instruction::AbsSign(to, val, kind, is_abs) => self.abs_sign(to, val, kind, is_abs)?,
         };
         Ok(Effect::None)
     }
@@ -72,6 +73,8 @@ impl<'a> Execution<'a> {
         if let Some(&str) = self.sys_call_map.get(&val) {
             match str {
                 "print_u32" => print!("{}", self.memory.read_int(self.cpu.s)),
+                "print_i32" => print!("{}", self.memory.read_int(self.cpu.s) as i32),
+                "print" => print!("{}", self.memory.read_int(self.cpu.s) as u8 as char),
                 _ => return Err(Tx8Error::InvalidSysCall),
             }
             Ok(())
@@ -153,30 +156,163 @@ impl<'a> Execution<'a> {
         to: Writable,
         first: Value,
         second: Value,
-        signed: bool,
+        kind: Type,
     ) -> Result<(), Tx8Error> {
         let (res_signed, overflow_signed) = (first.val as i32).overflowing_add(second.val as i32);
         let (res, overflow) = first.val.overflowing_add(second.val);
 
-        if signed {
-            to.write(&mut self.memory, &mut self.cpu, res_signed as u32)?;
-        } else {
-            to.write(&mut self.memory, &mut self.cpu, res)?;
+        match kind {
+            Type::Signed => to.write(&mut self.memory, &mut self.cpu, res_signed as u32)?,
+            Type::Unsigned => to.write(&mut self.memory, &mut self.cpu, res)?,
+            Type::Float => {
+                let res = f32::to_bits(f32::from_bits(first.val) + f32::from_bits(second.val));
+                to.write(&mut self.memory, &mut self.cpu, res)?;
+                return Ok(());
+            }
         }
 
         self.cpu.r = if overflow { 0x1 } else { 0x0 } | if overflow_signed { 0x10 } else { 0x0 };
         Ok(())
     }
 
-    fn mul(&mut self, to: Writable, val: Value, val2: Value, signed: bool) -> Result<(), Tx8Error> {
-        if signed {
-            let res = val.val as i32 as i64 * val2.val as i32 as i64;
-            to.write(&mut self.memory, &mut self.cpu, res as u32)?;
-            self.cpu.r = (res >> 32) as u32;
+    fn mul(&mut self, to: Writable, val: Value, val2: Value, kind: Type) -> Result<(), Tx8Error> {
+        match kind {
+            Type::Signed => {
+                let res = val.val as i32 as i64 * val2.val as i32 as i64;
+                to.write(&mut self.memory, &mut self.cpu, res as u32)?;
+                self.cpu.r = (res >> 32) as u32;
+            }
+            Type::Unsigned => {
+                let res = val.val as u64 * val2.val as u64;
+                to.write(&mut self.memory, &mut self.cpu, res as u32)?;
+                self.cpu.r = (res >> 32) as u32;
+            }
+            Type::Float => {
+                let res = f32::to_bits(f32::from_bits(val.val) * f32::from_bits(val2.val));
+                to.write(&mut self.memory, &mut self.cpu, res as u32)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn div(
+        &mut self,
+        to: Writable,
+        val: Value,
+        val2: Value,
+        kind: Type,
+        is_div: bool,
+    ) -> Result<(), Tx8Error> {
+        if val2.val == 0 {
+            return Err(Tx8Error::DivisionByZero);
+        }
+        let (res, remainder) = match kind {
+            Type::Signed => {
+                let res = val.val as i32 / val2.val as i32;
+                let remainder = val.val as i32 % val2.val as i32;
+                (res as u32, remainder as u32)
+            }
+            Type::Unsigned => {
+                let res = val.val / val2.val;
+                let remainder = val.val % val2.val;
+                (res, remainder)
+            }
+            Type::Float => {
+                if f32::from_bits(val2.val) == -0.0 {
+                    return Err(Tx8Error::DivisionByZero);
+                }
+                let res = f32::to_bits(f32::from_bits(val.val) / f32::from_bits(val2.val));
+                let remainder = f32::to_bits(f32::from_bits(val.val) % f32::from_bits(val2.val));
+                (res, remainder)
+            }
+        };
+        if is_div {
+            to.write(&mut self.memory, &mut self.cpu, res)?;
+            self.cpu.r = remainder;
         } else {
-            let res = val.val as u64 * val2.val as u64;
-            to.write(&mut self.memory, &mut self.cpu, res as u32)?;
-            self.cpu.r = (res >> 32) as u32;
+            to.write(&mut self.memory, &mut self.cpu, remainder)?;
+            self.cpu.r = res;
+        }
+        Ok(())
+    }
+
+    fn max_min(
+        &mut self,
+        to: Writable,
+        val: Value,
+        val2: Value,
+        kind: Type,
+        is_max: bool,
+    ) -> Result<(), Tx8Error> {
+        let (max, min) = match kind {
+            Type::Signed => {
+                if val.val as i32 > val2.val as i32 {
+                    (val.val, val2.val)
+                } else {
+                    (val2.val, val.val)
+                }
+            }
+            Type::Unsigned => {
+                if val.val > val2.val {
+                    (val.val, val2.val)
+                } else {
+                    (val2.val, val.val)
+                }
+            }
+            Type::Float => {
+                if f32::from_bits(val.val) > f32::from_bits(val2.val) {
+                    (val.val, val2.val)
+                } else {
+                    (val2.val, val.val)
+                }
+            }
+        };
+        if is_max {
+            to.write(&mut self.memory, &mut self.cpu, max)?;
+            self.cpu.r = min;
+        } else {
+            to.write(&mut self.memory, &mut self.cpu, min)?;
+            self.cpu.r = max;
+        }
+        Ok(())
+    }
+
+    fn abs_sign(
+        &mut self,
+        to: Writable,
+        val: Value,
+        kind: Type,
+        is_abs: bool,
+    ) -> Result<(), Tx8Error> {
+        let (res, sign) = match kind {
+            Type::Signed => {
+                let value = val.val as i32;
+                if value == 0 {
+                    (val.val, 0)
+                } else if value < 0 {
+                    (value.neg() as u32, -1i32 as u32)
+                } else {
+                    (val.val, 1)
+                }
+            }
+            Type::Unsigned => unreachable!(),
+            Type::Float => {
+                let value = f32::from_bits(val.val);
+                if value == 0.0 {
+                    (val.val, f32::to_bits(0.0))
+                } else if value < 0.0 {
+                    (f32::to_bits(value.neg()), f32::to_bits(-1.0))
+                } else {
+                    (val.val, f32::to_bits(1.0))
+                }
+            }
+        };
+        if is_abs {
+            to.write(&mut self.memory, &mut self.cpu, res)?;
+            self.cpu.r = sign as u32;
+        } else {
+            to.write(&mut self.memory, &mut self.cpu, sign as u32)?;
+            self.cpu.r = res;
         }
         Ok(())
     }

@@ -7,6 +7,7 @@ pub enum Tx8Error {
     InvalidRegister,
     InvalidSysCall,
     InvalidOpCode,
+    DivisionByZero,
 }
 
 impl Error for Tx8Error {}

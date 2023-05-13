@@ -213,6 +213,10 @@ impl Value {
         self.val = (-1 * (self.val as i32)) as u32;
         self
     }
+    pub fn fneg(mut self) -> Value {
+        self.val = f32::to_bits(-1.0 * f32::from_bits(self.val));
+        self
+    }
 }
 
 fn get_reg_size(byte: u8) -> Size {
