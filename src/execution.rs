@@ -23,7 +23,10 @@ impl<'a> Execution<'a> {
             "print_f32",
             "print_char",
             "test_af",
+            "test_au",
+            "test_ai",
             "test_rf",
+            "test_r",
         ];
         for sys_call in sys_calls {
             sys_call_map.insert(hash(sys_call), sys_call);
@@ -72,6 +75,20 @@ impl<'a> Execution<'a> {
                 self.max_min(to, val, val2, kind, is_max)?
             }
             Instruction::AbsSign(to, val, kind, is_abs) => self.abs_sign(to, val, kind, is_abs)?,
+            Instruction::And(to, val, val2) => self.and(to, val, val2)?,
+            Instruction::Or(to, val, val2) => self.or(to, val, val2)?,
+            Instruction::Not(to, val) => self.not(to, val)?,
+            Instruction::Nand(to, val, val2) => self.nand(to, val, val2)?,
+            Instruction::Xor(to, val, val2) => self.xor(to, val, val2)?,
+            Instruction::ShiftLogicalRight(to, val, val2) => self.slr(to, val, val2)?,
+            Instruction::ShiftArithRight(to, val, val2) => self.sar(to, val, val2)?,
+            Instruction::ShiftLogicLeft(to, val, val2) => self.sll(to, val, val2)?,
+            Instruction::RotateRight(to, val, val2) => self.ror(to, val, val2)?,
+            Instruction::RotateLeft(to, val, val2) => self.rol(to, val, val2)?,
+            Instruction::Set(to, val, val2) => self.set(to, val, val2)?,
+            Instruction::Clear(to, val, val2) => self.clear(to, val, val2)?,
+            Instruction::Toggle(to, val, val2) => self.toggle(to, val, val2)?,
+            Instruction::Test(val, val2) => self.test(val, val2),
         };
         Ok(Effect::None)
     }
@@ -84,7 +101,10 @@ impl<'a> Execution<'a> {
                 "print_f32" => print!("{}", f32::from_bits(self.memory.read_int(self.cpu.s))),
                 "print_char" => print!("{}", self.memory.read_int(self.cpu.s) as u8 as char),
                 "test_af" => println!("{}", f32::from_bits(self.cpu.a)),
+                "test_au" => println!("{:x}", self.cpu.a),
+                "test_ai" => println!("{}", self.cpu.a as i32),
                 "test_rf" => println!("{}", f32::from_bits(self.cpu.r)),
+                "test_r" => println!("{:x}", self.cpu.r),
                 _ => return Err(Tx8Error::InvalidSysCall),
             }
             Ok(())
@@ -322,6 +342,157 @@ impl<'a> Execution<'a> {
             self.cpu.r = res;
         }
         Ok(())
+    }
+
+    fn and(&mut self, to: Writable, val: Value, val2: Value) -> Result<(), Tx8Error> {
+        to.write(&mut self.memory, &mut self.cpu, val.val & val2.val)
+    }
+
+    fn or(&mut self, to: Writable, val: Value, val2: Value) -> Result<(), Tx8Error> {
+        to.write(&mut self.memory, &mut self.cpu, val.val | val2.val)
+    }
+
+    fn not(&mut self, to: Writable, val: Value) -> Result<(), Tx8Error> {
+        to.write(&mut self.memory, &mut self.cpu, !val.val)
+    }
+
+    fn nand(&mut self, to: Writable, val: Value, val2: Value) -> Result<(), Tx8Error> {
+        to.write(&mut self.memory, &mut self.cpu, !(val.val & val2.val))
+    }
+
+    fn xor(&mut self, to: Writable, val: Value, val2: Value) -> Result<(), Tx8Error> {
+        to.write(&mut self.memory, &mut self.cpu, val.val ^ val2.val)
+    }
+
+    fn slr(&mut self, to: Writable, val: Value, val2: Value) -> Result<(), Tx8Error> {
+        let filter = match to.size() {
+            Size::Byte => 0b111,
+            Size::Short => 0b1111,
+            Size::Int => 0b11111,
+        };
+        let shift_amount = val2.val & filter;
+        let res = val.val >> shift_amount;
+        let shifted_out = val.val & ((1 << shift_amount) - 1);
+        to.write(&mut self.memory, &mut self.cpu, res)?;
+        self.cpu.r = shifted_out;
+        Ok(())
+    }
+
+    fn sar(&mut self, to: Writable, val: Value, val2: Value) -> Result<(), Tx8Error> {
+        let filter = match to.size() {
+            Size::Byte => 0b111,
+            Size::Short => 0b1111,
+            Size::Int => 0b11111,
+        };
+        let shift_amount = val2.val & filter;
+        let res = val.val as i32 >> shift_amount;
+        let shifted_out = val.val & ((1 << shift_amount) - 1);
+        to.write(&mut self.memory, &mut self.cpu, res as u32)?;
+        self.cpu.r = shifted_out;
+        Ok(())
+    }
+
+    fn sll(&mut self, to: Writable, val: Value, val2: Value) -> Result<(), Tx8Error> {
+        let (filter, size) = match to.size() {
+            Size::Byte => (0b111, 8),
+            Size::Short => (0b1111, 16),
+            Size::Int => (0b11111, 32),
+        };
+        let shift_amount = val2.val & filter;
+        let res = val.val << shift_amount;
+        let shifted_out = if shift_amount == 0 {
+            0
+        } else {
+            val.val >> (size - shift_amount)
+        };
+        to.write(&mut self.memory, &mut self.cpu, res)?;
+        self.cpu.r = shifted_out;
+        Ok(())
+    }
+
+    fn ror(&mut self, to: Writable, val: Value, val2: Value) -> Result<(), Tx8Error> {
+        to.write(
+            &mut self.memory,
+            &mut self.cpu,
+            val.val.rotate_right(val2.val),
+        )
+    }
+
+    fn rol(&mut self, to: Writable, val: Value, val2: Value) -> Result<(), Tx8Error> {
+        to.write(
+            &mut self.memory,
+            &mut self.cpu,
+            val.val.rotate_left(val2.val),
+        )
+    }
+
+    fn set(&mut self, to: Writable, val: Value, val2: Value) -> Result<(), Tx8Error> {
+        let filter = match to.size() {
+            Size::Byte => 0b111,
+            Size::Short => 0b1111,
+            Size::Int => 0b11111,
+        };
+        let i = val2.val & filter;
+        let res = val.val | (1 << i);
+        to.write(&mut self.memory, &mut self.cpu, res)?;
+        let bit = val.val & (1 << i);
+        if bit != 0 {
+            self.cpu.r = 1;
+        } else {
+            self.cpu.r = 0;
+        }
+        Ok(())
+    }
+
+    fn clear(&mut self, to: Writable, val: Value, val2: Value) -> Result<(), Tx8Error> {
+        let filter = match to.size() {
+            Size::Byte => 0b111,
+            Size::Short => 0b1111,
+            Size::Int => 0b11111,
+        };
+        let i = val2.val & filter;
+        let res = val.val & (!(1 << i));
+        to.write(&mut self.memory, &mut self.cpu, res)?;
+        let bit = val.val & (1 << i);
+        if bit != 0 {
+            self.cpu.r = 1;
+        } else {
+            self.cpu.r = 0;
+        }
+        Ok(())
+    }
+
+    fn toggle(&mut self, to: Writable, val: Value, val2: Value) -> Result<(), Tx8Error> {
+        let filter = match to.size() {
+            Size::Byte => 0b111,
+            Size::Short => 0b1111,
+            Size::Int => 0b11111,
+        };
+        let i = val2.val & filter;
+        let res = val.val ^ (1 << i);
+        to.write(&mut self.memory, &mut self.cpu, res)?;
+        let bit = val.val & (1 << i);
+        if bit != 0 {
+            self.cpu.r = 1;
+        } else {
+            self.cpu.r = 0;
+        }
+        Ok(())
+    }
+
+    fn test(&mut self, val: Value, val2: Value) {
+        let filter = match val.size {
+            Size::Byte => 0b111,
+            Size::Short => 0b1111,
+            Size::Int => 0b11111,
+        };
+        let i = val2.val & filter;
+        let res = val.val & (1 << i);
+        if res != 0 {
+            self.cpu.r = 1;
+        } else {
+            self.cpu.r = 0;
+        }
     }
 }
 
