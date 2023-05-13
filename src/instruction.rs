@@ -16,7 +16,7 @@ pub fn parse_instruction(
     // if no parameters are passed, then the instruction is fully parsed
     match op_code {
         OpCode::Halt | OpCode::Nop | OpCode::Return => {
-            return Ok((Instruction::no_params(op_code), 0))
+            return Ok((Instruction::no_params(op_code), 1))
         }
         _ => (),
     };
@@ -48,7 +48,7 @@ pub enum Comparison {
     LessEqual,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(PartialEq, Clone, Copy, Debug)]
 pub enum Type {
     Signed,
     Unsigned,
@@ -304,7 +304,7 @@ impl Instruction {
             OpCode::IncFloat => Instruction::Add(
                 Writable::from_par(first_par)?,
                 Value::from_par(first_par, cpu, mem, Byte)?,
-                Value::new(1, Int),
+                Value::new(f32::to_bits(1.0), Int),
                 Type::Float,
             ),
             OpCode::DecFloat => Instruction::Add(
@@ -445,7 +445,7 @@ fn parse_op_code(byte: u8) -> Result<OpCode, Tx8Error> {
         0x64 => OpCode::ModUnsigned,
         0x65 => OpCode::MaxUnsigned,
         0x66 => OpCode::MinUnsigned,
-        _ => OpCode::Nop,
+        _ => return Err(Tx8Error::InvalidOpCode(byte)),
     })
 }
 

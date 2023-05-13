@@ -17,7 +17,14 @@ pub struct Execution<'a> {
 impl<'a> Execution<'a> {
     pub fn new_with_rom(data: &[u8]) -> Self {
         let mut sys_call_map = HashMap::new();
-        let sys_calls = ["print_u32", "print_i32", "print"];
+        let sys_calls = [
+            "print_u32",
+            "print_i32",
+            "print_f32",
+            "print_char",
+            "test_af",
+            "test_rf",
+        ];
         for sys_call in sys_calls {
             sys_call_map.insert(hash(sys_call), sys_call);
         }
@@ -74,7 +81,10 @@ impl<'a> Execution<'a> {
             match str {
                 "print_u32" => print!("{}", self.memory.read_int(self.cpu.s)),
                 "print_i32" => print!("{}", self.memory.read_int(self.cpu.s) as i32),
-                "print" => print!("{}", self.memory.read_int(self.cpu.s) as u8 as char),
+                "print_f32" => print!("{}", f32::from_bits(self.memory.read_int(self.cpu.s))),
+                "print_char" => print!("{}", self.memory.read_int(self.cpu.s) as u8 as char),
+                "test_af" => println!("{}", f32::from_bits(self.cpu.a)),
+                "test_rf" => println!("{}", f32::from_bits(self.cpu.r)),
                 _ => return Err(Tx8Error::InvalidSysCall),
             }
             Ok(())
@@ -203,7 +213,7 @@ impl<'a> Execution<'a> {
         kind: Type,
         is_div: bool,
     ) -> Result<(), Tx8Error> {
-        if val2.val == 0 {
+        if kind != Type::Float && val2.val == 0 {
             return Err(Tx8Error::DivisionByZero);
         }
         let (res, remainder) = match kind {
@@ -218,9 +228,6 @@ impl<'a> Execution<'a> {
                 (res, remainder)
             }
             Type::Float => {
-                if f32::from_bits(val2.val) == -0.0 {
-                    return Err(Tx8Error::DivisionByZero);
-                }
                 let res = f32::to_bits(f32::from_bits(val.val) / f32::from_bits(val2.val));
                 let remainder = f32::to_bits(f32::from_bits(val.val) % f32::from_bits(val2.val));
                 (res, remainder)

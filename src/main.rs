@@ -1,5 +1,6 @@
 use clap::Parser;
 use std::fs::read;
+use std::process::exit;
 use tx8_core::*;
 
 #[derive(Parser)]
@@ -11,7 +12,7 @@ struct Cli {
     filename: String,
 }
 
-fn main() -> Result<(), Tx8Error> {
+fn main() -> Result<(), ()> {
     let filename = Cli::parse().filename;
     println!("Reading {filename}");
     let file = match read(&filename) {
@@ -21,6 +22,11 @@ fn main() -> Result<(), Tx8Error> {
             return Ok(());
         }
     };
-    run_code(file)?;
-    Ok(())
+    match run_code(file) {
+        Ok(_) => exit(0),
+        Err(e) => {
+            println!("\n{}", e);
+            exit(1)
+        }
+    }
 }

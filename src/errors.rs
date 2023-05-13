@@ -6,7 +6,7 @@ pub enum Tx8Error {
     OutOfBoundsWrite,
     InvalidRegister,
     InvalidSysCall,
-    InvalidOpCode,
+    InvalidOpCode(u8),
     DivisionByZero,
 }
 
@@ -14,7 +14,10 @@ impl Error for Tx8Error {}
 
 impl Display for Tx8Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "ParseError")
+        match self {
+            Tx8Error::InvalidOpCode(op) => write!(f, "InvalidOpCode({:x})", op),
+            _ => write!(f, "{:?}", self),
+        }
     }
 }
 
