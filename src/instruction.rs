@@ -162,6 +162,16 @@ pub enum Size {
     Int,
 }
 
+impl Size {
+    pub fn bytes(&self) -> u32 {
+        match self {
+            Size::Byte => 1,
+            Size::Short => 2,
+            Size::Int => 4,
+        }
+    }
+}
+
 #[derive(Copy, Clone, Debug)]
 pub enum Writable {
     AbsoluteAddress(AbsoluteAddress),
@@ -334,6 +344,7 @@ pub enum Instruction {
     SysCall(Value),
     Return,
     Load(Writable, Value),
+    Push(Value),
 }
 
 impl Instruction {
@@ -396,6 +407,7 @@ impl Instruction {
                 Writable::from_par(first_par)?,
                 Value::from_par(sec_par, cpu, mem)?,
             ),
+            OpCode::Push => Instruction::Push(Value::from_par(first_par, cpu, mem)?),
         })
     }
 
@@ -411,6 +423,7 @@ impl Instruction {
             Instruction::SysCall(_) => true,
             Instruction::Return => false,
             Instruction::Load(_, _) => true,
+            Instruction::Push(_) => true,
         }
     }
 }
@@ -432,6 +445,7 @@ fn parse_op_code(byte: u8) -> Result<OpCode, Tx8Error> {
         0x0d => OpCode::Return,
         0x0e => OpCode::SysCall,
         0x10 => OpCode::Load,
+        0x1d => OpCode::Push,
         _ => return Err(Tx8Error::InvalidOpCode),
     })
 }
@@ -454,4 +468,5 @@ enum OpCode {
     Return,
     SysCall,
     Load,
+    Push,
 }

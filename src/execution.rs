@@ -16,7 +16,7 @@ pub struct Execution<'a> {
 impl<'a> Execution<'a> {
     pub fn new_with_rom(data: &[u8]) -> Self {
         let mut sys_call_map = HashMap::new();
-        let sys_calls = ["print"];
+        let sys_calls = ["print_u32"];
         for sys_call in sys_calls {
             sys_call_map.insert(hash(sys_call), sys_call);
         }
@@ -53,6 +53,7 @@ impl<'a> Execution<'a> {
             Instruction::SysCall(value) => self.sys_call(value.val)?,
             Instruction::Return => todo!(),
             Instruction::Load(to, val) => self.load(to, val.val)?,
+            Instruction::Push(val) => self.push(val)?,
         };
         Ok(Effect::None)
     }
@@ -60,7 +61,7 @@ impl<'a> Execution<'a> {
     fn sys_call(&self, val: u32) -> Result<(), Tx8Error> {
         if let Some(&str) = self.sys_call_map.get(&val) {
             match str {
-                "print" => print!("{}", self.memory.read_byte(self.cpu.s) as char),
+                "print_u32" => print!("{}", self.memory.read_int(self.cpu.s)),
                 _ => return Err(Tx8Error::InvalidSysCall),
             }
             Ok(())
@@ -103,6 +104,17 @@ impl<'a> Execution<'a> {
 
     fn load(&mut self, to: Writable, val: u32) -> Result<(), Tx8Error> {
         to.write(&mut self.memory, &mut self.cpu, val)
+    }
+
+    fn push(&mut self, val: Value) -> Result<(), Tx8Error> {
+        self.cpu.s -= val.size.bytes();
+        match val.size {
+            Size::Byte => self.memory.write_byte(self.cpu.s, (val.val & 0xff) as u8),
+            Size::Short => self
+                .memory
+                .write_short(self.cpu.s, (val.val & 0xffff) as u16),
+            Size::Int => self.memory.write_int(self.cpu.s, val.val),
+        }
     }
 }
 

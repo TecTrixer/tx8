@@ -86,11 +86,11 @@ impl Memory {
         }
     }
 
-    pub fn _write_byte(&mut self, ptr: u32, val: u8) -> Result<(), Tx8Error> {
+    pub fn write_byte(&mut self, ptr: u32, val: u8) -> Result<(), Tx8Error> {
         let ptr = truncate_ptr(ptr);
         self.write(ptr, val)
     }
-    pub fn _write_short(&mut self, ptr: u32, val: u16) -> Result<(), Tx8Error> {
+    pub fn write_short(&mut self, ptr: u32, val: u16) -> Result<(), Tx8Error> {
         let ptr = truncate_ptr(ptr);
         let [first, second] = val.to_le_bytes();
         self.write(ptr, first)?;
