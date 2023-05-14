@@ -102,6 +102,12 @@ pub enum Instruction {
     Log(Writable, Value),
     Log2(Writable, Value),
     Log10(Writable, Value),
+    Rand(Writable),
+    RSeed(Value),
+    ItoF(Writable, Value),
+    FtoI(Writable, Value),
+    UtoF(Writable, Value),
+    FtoU(Writable, Value),
 }
 
 impl Instruction {
@@ -521,6 +527,24 @@ impl Instruction {
                 Writable::from_par(first_par)?,
                 Value::from_par(first_par, cpu, mem, Byte)?,
             ),
+            OpCode::Rand => Instruction::Rand(Writable::from_par(first_par)?),
+            OpCode::RSeed => Instruction::RSeed(Value::from_par(first_par, cpu, mem, Byte)?),
+            OpCode::ItoF => Instruction::ItoF(
+                Writable::from_par(first_par)?,
+                Value::from_par_signed(first_par, cpu, mem, Byte)?,
+            ),
+            OpCode::FtoI => Instruction::FtoI(
+                Writable::from_par(first_par)?,
+                Value::from_par(first_par, cpu, mem, Byte)?,
+            ),
+            OpCode::UtoF => Instruction::UtoF(
+                Writable::from_par(first_par)?,
+                Value::from_par(first_par, cpu, mem, Byte)?,
+            ),
+            OpCode::FtoU => Instruction::FtoU(
+                Writable::from_par(first_par)?,
+                Value::from_par(first_par, cpu, mem, Byte)?,
+            ),
         })
     }
 
@@ -622,6 +646,12 @@ fn parse_op_code(byte: u8) -> Result<OpCode, Tx8Error> {
         0x64 => OpCode::ModUnsigned,
         0x65 => OpCode::MaxUnsigned,
         0x66 => OpCode::MinUnsigned,
+        0x70 => OpCode::Rand,
+        0x71 => OpCode::RSeed,
+        0x72 => OpCode::ItoF,
+        0x73 => OpCode::FtoI,
+        0x74 => OpCode::UtoF,
+        0x75 => OpCode::FtoU,
         _ => return Err(Tx8Error::InvalidOpCode(byte)),
     })
 }
@@ -714,4 +744,10 @@ enum OpCode {
     Log,
     Log2,
     Log10,
+    Rand,
+    RSeed,
+    ItoF,
+    FtoI,
+    UtoF,
+    FtoU,
 }

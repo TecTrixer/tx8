@@ -12,6 +12,8 @@ use execution::{Effect, Execution};
 mod parameter;
 use parameter::*;
 
+mod random;
+
 pub fn run_code(data: Vec<u8>) -> Result<(), Tx8Error> {
     let data = parse_rom(&data)?;
     let mut execution = Execution::new_with_rom(data)?;

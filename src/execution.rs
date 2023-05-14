@@ -4,6 +4,7 @@ use crate::{
     hardware::{Cpu, Memory},
     instruction::{parse_instruction, Comparison, Instruction, Type},
     parameter::{Size, Value, Writable, Write},
+    random::*,
     Tx8Error,
 };
 
@@ -12,6 +13,7 @@ pub struct Execution<'a> {
     cpu: Cpu,
     memory: Memory,
     sys_call_map: HashMap<u32, &'a str>,
+    rand: Rand,
 }
 
 impl<'a> Execution<'a> {
@@ -32,10 +34,12 @@ impl<'a> Execution<'a> {
         for sys_call in sys_calls {
             sys_call_map.insert(hash(sys_call), sys_call);
         }
+        let rand = Rand::new();
         Ok(Execution {
             cpu: Cpu::new(),
             memory: Memory::load_rom(data)?,
             sys_call_map,
+            rand,
         })
     }
     pub fn next_step(&mut self) -> Result<Effect, Tx8Error> {
@@ -104,6 +108,12 @@ impl<'a> Execution<'a> {
             Instruction::Log(to, val) => self.log(to, val)?,
             Instruction::Log2(to, val) => self.log2(to, val)?,
             Instruction::Log10(to, val) => self.log10(to, val)?,
+            Instruction::Rand(to) => self.rand(to)?,
+            Instruction::RSeed(val) => self.rseed(val),
+            Instruction::ItoF(to, val) => self.i_to_f(to, val)?,
+            Instruction::FtoI(to, val) => self.f_to_i(to, val)?,
+            Instruction::UtoF(to, val) => self.u_to_f(to, val)?,
+            Instruction::FtoU(to, val) => self.f_to_f(to, val)?,
         };
         Ok(Effect::None)
     }
@@ -643,6 +653,50 @@ impl<'a> Execution<'a> {
     fn log10(&mut self, to: Writable, val: Value) -> Result<(), Tx8Error> {
         let res = f32::from_bits(val.val).log10();
         to.write(&mut self.memory, &mut self.cpu, f32::to_bits(res))
+    }
+
+    fn i_to_f(&mut self, to: Writable, val: Value) -> Result<(), Tx8Error> {
+        to.write(
+            &mut self.memory,
+            &mut self.cpu,
+            f32::to_bits(val.val as i32 as f32),
+        )
+    }
+
+    fn f_to_i(&mut self, to: Writable, val: Value) -> Result<(), Tx8Error> {
+        to.write(
+            &mut self.memory,
+            &mut self.cpu,
+            f32::from_bits(val.val) as i32 as u32,
+        )
+    }
+
+    fn u_to_f(&mut self, to: Writable, val: Value) -> Result<(), Tx8Error> {
+        to.write(
+            &mut self.memory,
+            &mut self.cpu,
+            f32::to_bits(val.val as f32),
+        )
+    }
+
+    fn f_to_f(&mut self, to: Writable, val: Value) -> Result<(), Tx8Error> {
+        to.write(
+            &mut self.memory,
+            &mut self.cpu,
+            f32::from_bits(val.val) as u32,
+        )
+    }
+
+    fn rand(&mut self, to: Writable) -> Result<(), Tx8Error> {
+        let res = self.rand.next();
+        let float = res as f32 / RANGE as f32;
+        to.write(&mut self.memory, &mut self.cpu, f32::to_bits(float))?;
+        self.cpu.r = res;
+        Ok(())
+    }
+
+    fn rseed(&mut self, val: Value) {
+        self.rand.set_seed(val.val);
     }
 }
 
