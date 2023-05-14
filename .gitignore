@@ -6,3 +6,5 @@
 
 /target
 tx8-cli
+
+!/examples/*.tx8

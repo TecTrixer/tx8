@@ -1,4 +1,4 @@
-use std::{collections::HashMap, ops::Neg};
+use std::{collections::HashMap, io::Read, ops::Neg};
 
 use crate::{
     hardware::{Cpu, Memory},
@@ -14,6 +14,7 @@ pub struct Execution<'a> {
     memory: Memory,
     sys_call_map: HashMap<u32, &'a str>,
     rand: Rand,
+    input: std::vec::IntoIter<u8>,
 }
 
 impl<'a> Execution<'a> {
@@ -23,6 +24,7 @@ impl<'a> Execution<'a> {
             "print_u32",
             "print_i32",
             "print_f32",
+            "print_u8",
             "print_char",
             "test_af",
             "test_au",
@@ -30,16 +32,23 @@ impl<'a> Execution<'a> {
             "test_rf",
             "test_r",
             "test_ri",
+            "read_char",
         ];
         for sys_call in sys_calls {
             sys_call_map.insert(hash(sys_call), sys_call);
         }
         let rand = Rand::new();
+        let mut input = Vec::new();
+        let mut stdin = std::io::stdin().lock();
+        stdin
+            .read_to_end(&mut input)
+            .map_err(|_| Tx8Error::NoInputGiven)?;
         Ok(Execution {
             cpu: Cpu::new(),
             memory: Memory::load_rom(data)?,
             sys_call_map,
             rand,
+            input: input.into_iter(),
         })
     }
     pub fn next_step(&mut self) -> Result<Effect, Tx8Error> {
@@ -118,19 +127,27 @@ impl<'a> Execution<'a> {
         Ok(Effect::None)
     }
 
-    fn sys_call(&self, val: u32) -> Result<(), Tx8Error> {
+    fn sys_call(&mut self, val: u32) -> Result<(), Tx8Error> {
         if let Some(&str) = self.sys_call_map.get(&val) {
             match str {
                 "print_u32" => print!("{}", self.memory.read_int(self.cpu.s)),
                 "print_i32" => print!("{}", self.memory.read_int(self.cpu.s) as i32),
                 "print_f32" => print!("{}", f32::from_bits(self.memory.read_int(self.cpu.s))),
                 "print_char" => print!("{}", self.memory.read_int(self.cpu.s) as u8 as char),
+                "print_u8" => print!("{}", self.memory.read_int(self.cpu.s) as u8),
                 "test_af" => println!("{}", f32::from_bits(self.cpu.a)),
                 "test_au" => println!("{:x}", self.cpu.a),
                 "test_ai" => println!("{}", self.cpu.a as i32),
                 "test_rf" => println!("{}", f32::from_bits(self.cpu.r)),
                 "test_r" => println!("{:x}", self.cpu.r),
                 "test_ri" => println!("{}", self.cpu.r as i32),
+                "read_char" => {
+                    if let Some(char) = self.input.next() {
+                        self.cpu.o = char as u8 as u32;
+                    } else {
+                        return Err(Tx8Error::NoInputGiven);
+                    }
+                }
                 _ => return Err(Tx8Error::InvalidSysCall),
             }
             Ok(())

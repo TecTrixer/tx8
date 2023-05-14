@@ -1,0 +1,146 @@
+	jmp :code;					ensure that the brainfuck code does not get executed as raw instructions
+	
+:brainfuckstring "++++++++[>++++[>++>+++>+++>+<<<<-]>+>+>->>+[<]<-]>>.>---.+++++++..+++.>>.<-.<.+++.------.--------.>>+.>++."
+
+:code
+	ld s 0xffffff;				set stack to top of memory
+	lda :brainfuckstring; 		a is the instruction pointer
+	ldb 0; 						b has the address of the last open bracket
+	ld #0xffff00 0;				any non zero value enables debug mode
+	ldc 0x1000;					c has the pointer to the memory for brainfuck
+:step
+	lw o @a;					load the next instruction into o
+
+	ucmp ob 0x00;				check if instruction is null
+	jeq :end;					in that case stop execution
+
+	ucmp ob 0x2b;				check if instruction is '+'
+	jeq :add
+
+	ucmp ob 0x2d;				check if instruction is '-'
+	jeq :sub
+
+	ucmp ob 0x3e;				check if instruction is '>'
+	jeq :right
+
+	ucmp ob 0x3c;				check if instruction is '<'
+	jeq :left
+
+	ucmp ob 0x5b;				check if instruction is '['
+	jeq :open
+
+	ucmp ob 0x5d;				check if instruction is ']'
+	jeq :close
+
+	ucmp ob 0x2e;				check if instruction is '.'
+	jeq :print
+
+	ucmp ob 0x2c;				check if instruction is ','
+	jeq :read
+
+:endstep
+	inc a;						increase instruction pointer
+	jmp :step;					execute next step (only way to exit is if null is read)
+
+:add
+	push 0x2b;
+	call :debugprint;
+	add s 4; 					prints '+' if debugprint is enabled
+
+	ld db @c;					load memory value into d
+	inc db;
+	ld @c db;					load memory value into c
+	jmp :endstep
+
+:sub
+	push 0x2d;
+	call :debugprint;
+	add s 4;					prints '-' if debugprint is enabled
+	
+	ld db @c;					load memory value into d
+	dec db;
+	ld @c db;					load memory value into c
+	jmp :endstep
+
+:right
+	push 0x3e;
+	call :debugprint;
+	add s 4;					prints '>' if debugprint is enabled
+	
+	inc c;						increase the memory pointer
+	jmp :endstep
+	
+:left
+	push 0x3c;
+	call :debugprint;
+	add s 4;					prints '<' if debugprint is enabled
+	
+	dec c;						decrease the memory pointer
+	jmp :endstep
+
+:open
+	push 0x5b;
+	call :debugprint;
+	add s 4;					prints '[' if debugprint is enabled
+	
+	add b 4;					add 4 to the open bracket pointer because 4 bytes have been stored there
+	lw @b a;					load instruction pointer to bracket register
+	jmp :endstep
+
+:close
+	push 0x5d;
+	call :debugprint;
+	add s 4;					prints ']' if debugprint is enabled
+	
+	ld db @c;					load value
+	ucmp db 0x00;				check if value is zero
+	jeq :removebracket;			if yes, then go to remove bracket
+	lw a @b;					load last bracket instruction pointer into instruction pointer
+	jmp :endstep;				go to next step	to execute the first instruction again
+
+:removebracket
+	sub b 4;					pop bracket instruction pointer
+	jmp :endstep
+
+:print
+	push 0x2e;
+	call :debugprint;
+	add s 4;					prints '.' if debugprint is enabled
+	
+	ld db @c;
+	push db;
+	call :printnewline;			prints a newline if debugprint is enabled
+	sys &print_char;;			prints the current char
+	call :printnewline;			prints a newline if debugprint is enabled
+	add s 1;
+	jmp :endstep
+	
+:read
+	push 0x2c;
+	call :debugprint;
+	add s 4;					prints ',' if debugprint is enabled
+	
+	sys &read_char;				write new char in o with syscall
+	ld @c ob;					load char into memory
+	jmp :endstep
+	
+:printnewline
+	push 0x0a;
+	call :debugprint;
+	add s 4;
+	ret
+
+:debugprint
+	ld o #0xffff00;				get debug boolean
+	cmp ob 0x00
+	jeq :return
+	add s 4;					temporarily pop return address
+	sys &print_char;
+	sub s 4;
+:return
+	ret
+	
+
+:end
+	hlt;						avoid that the program executes the brainfuck as raw instructions
+

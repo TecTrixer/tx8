@@ -8,6 +8,7 @@ pub enum Tx8Error {
     InvalidSysCall,
     InvalidOpCode(u8),
     DivisionByZero,
+    NoInputGiven,
 }
 
 impl Error for Tx8Error {}
