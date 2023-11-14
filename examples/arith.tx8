@@ -1,0 +1,34 @@
+:start
+    inc a; 1
+    call :print
+    dec a; 0
+    call :print
+    add a 2; 2
+    call :print
+    sub a 1; 1
+    call :print
+    mul a 19; 19
+    call :print
+    div a 2; 9
+    call :print
+    max a 7; 9
+    call :print
+    mod a 5; 4
+    call :print
+    mul a -1; -4
+    call :print
+    abs a; 4
+:print
+    push a
+    sys &print_i32; print a
+    pop a
+    push 32
+    sys &print_char; print space
+    pop $1
+    push r
+    sys &print_i32; print r
+    pop r
+    push 10
+    sys &print_char; print newline
+    pop $1
+    ret

@@ -2,11 +2,13 @@
 [![Coverage Status](https://coveralls.io/repos/github/vypxl/tx8/badge.svg?branch=main)](https://coveralls.io/github/vypxl/tx8?branch=main)
 [![License](https://img.shields.io/badge/license-%20MIT-blue.svg)](https://github.com/vypxl/tx8/blob/main/LICENSE)
 
-# TX8
+This is a rewrite of this project in Rust. A friend has the main version of it written in C++: [github.com/vypxl/tx8](https://github.com/vypxl/tx8)
 
+# TX8
 **WIP** The assembler as well as the bytecode interpreter should work as of now. I will create unit tests for both and
 add a few stdlib functions next. The api and binary format is not yet finalized, expect changes all over the place.
 As I am writing the tests, I will be modifying / augmenting the spec to correctly handle all features.
+
 
 ## About
 
