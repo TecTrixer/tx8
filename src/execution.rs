@@ -53,6 +53,7 @@ impl<'a> Execution<'a> {
     }
     pub fn next_step(&mut self) -> Result<Effect, Tx8Error> {
         let (instruction, len) = parse_instruction(&self.cpu, &self.memory, self.cpu.p)?;
+        // println!("Executing instr [{:x}] - {:?}", self.cpu.p, instruction);
 
         let effect = self.execute_instruction(instruction, len)?;
         // increase instruction pointer

@@ -54,10 +54,20 @@ pub fn parse_parameter(mem: &Memory, ptr: u32, par_mode: ParameterMode) -> (Para
     }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone)]
 pub struct Value {
     pub val: u32,
     pub size: Size,
+}
+
+impl std::fmt::Debug for Value {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Value {{ val: 0x{:x}, size: {:?} }}",
+            self.val, self.size
+        )
+    }
 }
 
 impl Value {
@@ -250,7 +260,7 @@ impl Writable {
             Parameter::Unused => Err(Tx8Error::InstructionError),
             Parameter::Constant8(_) => Err(Tx8Error::InstructionError),
             Parameter::Constant16(_) => Err(Tx8Error::InstructionError),
-            Parameter::Constant32(_) => Err(Tx8Error::InstructionError),
+            Parameter::Constant32(x) => Ok(Writable::AbsoluteAddress(AbsoluteAddress(x))),
             Parameter::AbsoluteAddress(x) => Ok(Writable::AbsoluteAddress(AbsoluteAddress(x))),
             Parameter::RelativeAddress(x) => Ok(Writable::RelativeAddress(RelativeAddress(x))),
             Parameter::Register(x) => Ok(Writable::Register(Register(x))),
@@ -304,12 +314,18 @@ pub trait Write {
     ) -> Result<(), Tx8Error>;
     fn size(&self) -> Size;
 }
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone)]
 pub struct AbsoluteAddress(u32);
+
+impl std::fmt::Debug for AbsoluteAddress {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "0x{:x}", self.0)
+    }
+}
 
 impl Write for AbsoluteAddress {
     fn write(self, mem: &mut Memory, cpu: &mut Cpu, val: u32) -> Result<(), Tx8Error> {
-        self.write_size(mem, cpu, val, Byte)
+        self.write_size(mem, cpu, val, Int)
     }
     fn size(&self) -> Size {
         Int
